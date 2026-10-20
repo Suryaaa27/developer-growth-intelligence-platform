@@ -1,0 +1,29 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Backend API for Developer Growth Intelligence Platform",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "admin:create": "node scripts/createAdmin.js",
+    "migrate": "node scripts/migrate.js",
+    "test:rbac": "node scripts/testRbac.js",
+    "test:admin": "node scripts/testAdminEndpoints.js",
+    "test:github": "node scripts/testGithubIntegration.js",
+    "test:github:smoke": "node scripts/testGithubRealSmoke.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-validator": "^7.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.24.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
