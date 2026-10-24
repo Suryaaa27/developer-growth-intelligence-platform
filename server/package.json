@@ -12,7 +12,10 @@
     "test:rbac": "node scripts/testRbac.js",
     "test:admin": "node scripts/testAdminEndpoints.js",
     "test:github": "node scripts/testGithubIntegration.js",
-    "test:github:smoke": "node scripts/testGithubRealSmoke.js"
+    "test:oauth": "node scripts/testGithubOAuth.js",
+    "test:github:smoke": "node scripts/testGithubRealSmoke.js",
+    "test:skills": "node scripts/testSkillAnalysis.js",
+    "test:persistence": "node scripts/testSkillPersistence.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

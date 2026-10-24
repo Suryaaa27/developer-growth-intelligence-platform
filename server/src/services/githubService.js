@@ -172,14 +172,188 @@ export const fetchUserRepos = async (githubUsername, optionsOrToken = null) => {
   return allRepositories;
 };
 
-// Fetch programming language breakdown for a specific repo (for future analysis steps)
-export const fetchRepoLanguages = async (fullRepoName, accessToken = null) => {
-  // TODO: GET https://api.github.com/repos/{owner}/{repo}/languages
-  throw new Error('fetchRepoLanguages - Not yet implemented');
+/**
+ * Fetch the byte-count language breakdown for a specific repository.
+ * Returns an object like { JavaScript: 12345, TypeScript: 6789 }.
+ * Returns null (not throws) when the repo has no language stats (empty repo).
+ *
+ * @param {string} fullRepoName - "owner/repo" format
+ * @param {string|null} [accessToken=null] - Optional OAuth/PAT token
+ * @param {object} [_options={}] - Internal override hook for tests ({ fetcher, timeoutMs })
+ * @returns {Promise<object|null>} Language byte map or null
+ */
+export const fetchRepoLanguages = async (fullRepoName, accessToken = null, _options = {}) => {
+  if (!fullRepoName || typeof fullRepoName !== 'string' || !fullRepoName.includes('/')) {
+    const err = new Error('fullRepoName must be in "owner/repo" format.');
+    err.status = 400;
+    throw err;
+  }
+
+  const token = accessToken || process.env.GITHUB_TOKEN || null;
+  const customFetcher = _options.fetcher || globalThis.fetch;
+  const timeoutMs = _options.timeoutMs || DEFAULT_TIMEOUT_MS;
+
+  const headers = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'Developer-Growth-Platform',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const [owner, repo] = fullRepoName.split('/');
+  const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/languages`;
+
+  const response = await fetchWithTimeout(url, { method: 'GET', headers }, timeoutMs, customFetcher);
+
+  if (response.status === 404) {
+    const err = new Error(`Repository '${fullRepoName}' not found on GitHub.`);
+    err.status = 404;
+    err.code = 'GITHUB_REPO_NOT_FOUND';
+    throw err;
+  }
+
+  if (response.status === 403 || response.status === 429) {
+    const remaining = response.headers?.get ? response.headers.get('x-ratelimit-remaining') : null;
+    if (remaining === '0' || response.status === 429) {
+      const err = new Error('GitHub API rate limit exceeded. Please try again later.');
+      err.status = 429;
+      err.code = 'GITHUB_RATE_LIMITED';
+      throw err;
+    }
+    const err = new Error('GitHub API request was forbidden.');
+    err.status = 403;
+    err.code = 'GITHUB_FORBIDDEN';
+    throw err;
+  }
+
+  if (!response.ok) {
+    const err = new Error(`GitHub API returned unexpected status ${response.status} for languages endpoint.`);
+    err.status = response.status >= 500 ? 502 : response.status;
+    err.code = 'GITHUB_API_ERROR';
+    throw err;
+  }
+
+  let languageMap;
+  try {
+    languageMap = await response.json();
+  } catch {
+    const err = new Error('Invalid JSON response from GitHub languages endpoint.');
+    err.status = 502;
+    err.code = 'GITHUB_PARSE_ERROR';
+    throw err;
+  }
+
+  // GitHub returns {} for repos with no detectable language — normalize to null
+  if (!languageMap || typeof languageMap !== 'object' || Array.isArray(languageMap)) {
+    return null;
+  }
+
+  if (Object.keys(languageMap).length === 0) {
+    return null;
+  }
+
+  return languageMap;
 };
 
-// Fetch a specific file's content from a repo (for future analysis steps)
-export const fetchFileContent = async (fullRepoName, filePath, accessToken = null) => {
-  // TODO: GET https://api.github.com/repos/{owner}/{repo}/contents/{path}
-  throw new Error('fetchFileContent - Not yet implemented');
+/**
+ * Fetch a single file's decoded text content from a repository.
+ * Uses the GitHub Contents API. Returns null when the path does not exist
+ * (404) so callers can gracefully skip missing manifests without crashing.
+ *
+ * Files > 1 MB are skipped; the GitHub API truncates or rejects them.
+ * Content is Base64-decoded safely; binary files that cannot be decoded
+ * as UTF-8 are returned as null.
+ *
+ * @param {string} fullRepoName - "owner/repo" format
+ * @param {string} filePath - Path within the repo, e.g. "package.json"
+ * @param {string|null} [accessToken=null] - Optional OAuth/PAT token
+ * @param {object} [_options={}] - Internal override hook for tests ({ fetcher, timeoutMs })
+ * @returns {Promise<string|null>} Decoded file text, or null if absent/binary/oversized
+ */
+export const fetchFileContent = async (fullRepoName, filePath, accessToken = null, _options = {}) => {
+  if (!fullRepoName || typeof fullRepoName !== 'string' || !fullRepoName.includes('/')) {
+    const err = new Error('fullRepoName must be in "owner/repo" format.');
+    err.status = 400;
+    throw err;
+  }
+
+  if (!filePath || typeof filePath !== 'string') {
+    const err = new Error('filePath must be a non-empty string.');
+    err.status = 400;
+    throw err;
+  }
+
+  const token = accessToken || process.env.GITHUB_TOKEN || null;
+  const customFetcher = _options.fetcher || globalThis.fetch;
+  const timeoutMs = _options.timeoutMs || DEFAULT_TIMEOUT_MS;
+
+  const headers = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'Developer-Growth-Platform',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const [owner, repo] = fullRepoName.split('/');
+  const safePath = filePath.replace(/^\//u, ''); // strip leading slash
+  const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${safePath}`;
+
+  const response = await fetchWithTimeout(url, { method: 'GET', headers }, timeoutMs, customFetcher);
+
+  // 404 = file simply doesn't exist in this repo — not an error for callers
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (response.status === 403 || response.status === 429) {
+    const remaining = response.headers?.get ? response.headers.get('x-ratelimit-remaining') : null;
+    if (remaining === '0' || response.status === 429) {
+      const err = new Error('GitHub API rate limit exceeded. Please try again later.');
+      err.status = 429;
+      err.code = 'GITHUB_RATE_LIMITED';
+      throw err;
+    }
+    const err = new Error('GitHub API request was forbidden.');
+    err.status = 403;
+    err.code = 'GITHUB_FORBIDDEN';
+    throw err;
+  }
+
+  if (!response.ok) {
+    const err = new Error(`GitHub API returned unexpected status ${response.status} for contents endpoint.`);
+    err.status = response.status >= 500 ? 502 : response.status;
+    err.code = 'GITHUB_API_ERROR';
+    throw err;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    // Unparseable response — treat as absent
+    return null;
+  }
+
+  // Guard: the API should return an object, not an array (directory listing)
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+
+  // Skip files that are too large (GitHub reports size in bytes)
+  const MAX_FILE_BYTES = 1_000_000; // 1 MB
+  if (typeof payload.size === 'number' && payload.size > MAX_FILE_BYTES) {
+    return null;
+  }
+
+  if (payload.encoding !== 'base64' || typeof payload.content !== 'string') {
+    return null;
+  }
+
+  // GitHub wraps Base64 lines with newlines — strip before decoding
+  const base64Clean = payload.content.replace(/\n/g, '');
+
+  try {
+    return Buffer.from(base64Clean, 'base64').toString('utf8');
+  } catch {
+    // Binary file that can't be decoded as UTF-8 — skip
+    return null;
+  }
 };

@@ -28,6 +28,7 @@ export const authAPI = {
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => request('/auth/me'),
+  getGitHubAuthUrl: () => request('/auth/github?format=json'),
 };
 
 // ── Users (Ownership Protected) ─────────────────────────────
@@ -88,12 +89,12 @@ export const githubAPI = {
 // ── Skills ──────────────────────────────────────────────────
 export const skillsAPI = {
   getUserSkills: () => request('/skills'),
-  getSkillEvidence: (skillName) => request(`/skills/${skillName}`),
+  getSkillEvidence: (skillName) => request(`/skills/${encodeURIComponent(skillName)}`),
 };
 
 // ── Analysis ────────────────────────────────────────────────
 export const analysisAPI = {
-  runAnalysis: (body) => request('/analysis/run', { method: 'POST', body: JSON.stringify(body) }),
+  runAnalysis: (body = {}) => request('/analysis/run', { method: 'POST', body: JSON.stringify(body) }),
   getSnapshots: () => request('/analysis/snapshots'),
 };
 

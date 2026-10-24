@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import RepositoryCard from '../components/RepositoryCard';
-import { githubAPI } from '../services/api';
+import { githubAPI, authAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Format timestamp into human-readable date.
@@ -22,14 +24,17 @@ const formatDate = (dateString) => {
 };
 
 const GitHubRepositories = () => {
+  const { user, refreshUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // State for repository data
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
   // State for synchronization action
-  const [githubUsername, setGithubUsername] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const [syncError, setSyncError] = useState(null);
   const [syncSuccess, setSyncSuccess] = useState(null);
 
@@ -61,14 +66,61 @@ const GitHubRepositories = () => {
     fetchRepositories();
   }, [fetchRepositories]);
 
-  // Handle repository synchronization
+  // Handle OAuth callback indicators in URL query parameters
+  useEffect(() => {
+    const linked = searchParams.get('github');
+    const error = searchParams.get('github_error');
+
+    if (linked === 'linked') {
+      setSyncSuccess('GitHub account linked successfully! Your verified profile is now connected.');
+      setSyncError(null);
+      if (refreshUser) refreshUser();
+      fetchRepositories();
+      setSearchParams({}, { replace: true });
+    } else if (error) {
+      const errorMap = {
+        access_denied: 'GitHub authorization was cancelled or access was denied.',
+        account_already_linked: 'This GitHub account is already linked to another DevGrowth user.',
+        invalid_state: 'Invalid or expired authorization request. Please try linking again.',
+        missing_code_or_state: 'Missing authorization code or state from GitHub callback.',
+        token_exchange_failed: 'Failed to exchange authorization code with GitHub.',
+        profile_fetch_failed: 'Failed to retrieve verified user profile from GitHub.',
+        user_inactive_or_not_found: 'Account is inactive or not found.',
+        network_error: 'Network failure while connecting to GitHub API.',
+        server_config_error: 'GitHub OAuth is not configured properly on the server.',
+        server_error: 'An unexpected server error occurred during GitHub linking.',
+      };
+      setSyncError(errorMap[error] || 'Failed to link GitHub account. Please try again.');
+      setSyncSuccess(null);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, refreshUser, fetchRepositories]);
+
+  // Handle GitHub OAuth account linking initiation
+  const handleLinkGitHub = async () => {
+    setIsLinking(true);
+    setSyncError(null);
+    try {
+      const res = await authAPI.getGitHubAuthUrl();
+      if (res?.success && res?.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        setSyncError(res?.message || 'Unable to generate GitHub authorization URL.');
+        setIsLinking(false);
+      }
+    } catch (err) {
+      setSyncError(err.message || 'Failed to connect to GitHub OAuth service.');
+      setIsLinking(false);
+    }
+  };
+
+  // Handle repository synchronization using verified linked account
   const handleSync = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (isSyncing) return;
 
-    const trimmed = githubUsername.trim();
-    if (!trimmed) {
-      setSyncError('Please enter a GitHub username to import.');
+    if (!user?.githubUsername) {
+      setSyncError('Please link your GitHub account before synchronizing repositories.');
       setSyncSuccess(null);
       return;
     }
@@ -78,11 +130,11 @@ const GitHubRepositories = () => {
     setSyncSuccess(null);
 
     try {
-      const response = await githubAPI.syncRepos({ githubUsername: trimmed });
+      const response = await githubAPI.syncRepos({ githubUsername: user.githubUsername });
       if (response?.success) {
         const syncedCount = response.data?.syncedCount ?? 0;
         setSyncSuccess(
-          response.message || `Successfully imported ${syncedCount} public repositories from @${trimmed}.`
+          response.message || `Successfully imported ${syncedCount} public repositories from @${user.githubUsername}.`
         );
         // Refresh local repository list with updated records
         if (Array.isArray(response.data?.repositories)) {
@@ -90,7 +142,6 @@ const GitHubRepositories = () => {
         } else {
           await fetchRepositories();
         }
-        setGithubUsername('');
       } else {
         setSyncError(response?.message || 'Failed to synchronize repositories.');
       }
@@ -164,41 +215,59 @@ const GitHubRepositories = () => {
       >
         <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
-            <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-semibold)', margin: '0 0 var(--space-1) 0', color: 'var(--color-text-primary)' }}>
-              Import Public Repositories
-            </h2>
+            <div className="flex items-center gap-2" style={{ marginBottom: 'var(--space-1)' }}>
+              <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-semibold)', margin: 0, color: 'var(--color-text-primary)' }}>
+                {user?.githubUsername ? 'Synchronize Verified Repositories' : 'Link Your GitHub Account'}
+              </h2>
+              {user?.githubUsername && (
+                <span className="badge badge--green" style={{ fontSize: 'var(--text-xs)' }}>
+                  Connected: @{user.githubUsername}
+                </span>
+              )}
+            </div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-              Enter a public GitHub username to import repositories. Public code metadata is fetched via the GitHub API without requiring account credentials.
+              {user?.githubUsername
+                ? `Repositories will be synchronized directly for your verified GitHub profile (@${user.githubUsername}).`
+                : 'Authenticate with GitHub to securely link your developer profile and import verified repositories.'}
             </p>
           </div>
 
-          <form onSubmit={handleSync} className="flex items-center gap-3" style={{ flexWrap: 'wrap', width: '100%', maxWidth: '480px' }}>
-            <div className="search-input-wrapper" style={{ flex: '1 1 200px' }}>
-              <input
-                type="text"
-                id="github-username-input"
-                className="form-input"
-                placeholder="GitHub username (e.g. octocat)"
-                value={githubUsername}
-                onChange={(e) => {
-                  setGithubUsername(e.target.value);
-                  if (syncError) setSyncError(null);
-                }}
-                disabled={isSyncing}
-                autoComplete="off"
-                spellCheck="false"
-              />
-            </div>
-            <button
-              type="submit"
-              id="btn-sync-github"
-              className="btn btn--primary"
-              disabled={isSyncing || !githubUsername.trim()}
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              {isSyncing ? 'Syncing...' : 'Sync Repositories'}
-            </button>
-          </form>
+          <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
+            {user?.githubUsername ? (
+              <>
+                <button
+                  type="button"
+                  id="btn-sync-github"
+                  className="btn btn--primary"
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {isSyncing ? 'Syncing...' : 'Sync Repositories'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={handleLinkGitHub}
+                  disabled={isLinking}
+                  title="Link a different GitHub account or refresh authorization"
+                >
+                  {isLinking ? 'Connecting...' : 'Re-link Account'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                id="btn-link-github"
+                className="btn btn--primary"
+                onClick={handleLinkGitHub}
+                disabled={isLinking}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {isLinking ? 'Redirecting to GitHub...' : 'Connect GitHub Account'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Sync Success Notification */}

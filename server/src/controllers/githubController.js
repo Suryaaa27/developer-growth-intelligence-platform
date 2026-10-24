@@ -62,7 +62,33 @@ export const syncRepos = async (req, res) => {
     const userId = req.user.id;
     const { githubUsername } = req.body || {};
 
-    // 1. Validate username presence and type
+    // 1. Verify that user has a verified linked GitHub account
+    const [userRows] = await pool.query(
+      'SELECT id, github_id, github_username FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (!userRows || userRows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const dbUser = userRows[0];
+
+    // Reject unlinked users from synchronizing repositories
+    if (!dbUser.github_id || !dbUser.github_username) {
+      return res.status(403).json({
+        success: false,
+        code: 'GITHUB_NOT_LINKED',
+        message: 'No linked GitHub account found. Please link your GitHub account before synchronizing repositories.',
+      });
+    }
+
+    const verifiedUsername = dbUser.github_username;
+
+    // 2. Validate client-supplied username and enforce ownership
     if (!githubUsername || typeof githubUsername !== 'string' || !githubUsername.trim()) {
       return res.status(400).json({
         success: false,
@@ -70,16 +96,27 @@ export const syncRepos = async (req, res) => {
       });
     }
 
-    const trimmedUsername = githubUsername.trim();
+    const trimmedInput = githubUsername.trim();
 
-    // 2. Validate GitHub username format: alphanumeric + single hyphens, 1-39 chars, no start/end hyphen
     const githubUsernameRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/;
-    if (!githubUsernameRegex.test(trimmedUsername)) {
+    if (!githubUsernameRegex.test(trimmedInput)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid GitHub username format. Usernames can only contain alphanumeric characters and single hyphens, and cannot begin or end with a hyphen.',
       });
     }
+
+    // Enforce ownership: reject arbitrary username that does not match verified linked account
+    if (trimmedInput.toLowerCase() !== verifiedUsername.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        code: 'GITHUB_OWNERSHIP_MISMATCH',
+        message: `Forbidden. You can only synchronize repositories for your verified linked GitHub account (@${verifiedUsername}).`,
+      });
+    }
+
+    // Strictly synchronize the verified linked account
+    const trimmedUsername = verifiedUsername;
 
     // 3. Fetch public repositories from GitHub
     let fetchedRepos;

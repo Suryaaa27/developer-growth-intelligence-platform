@@ -1,10 +1,13 @@
 import express from 'express';
+import { runAnalysis } from '../controllers/analysisController.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Placeholder Analysis routes
-// POST /api/analysis/run          → Run a full skill gap analysis for the user
-// GET  /api/analysis/snapshots    → Get all past analysis snapshots
-// GET  /api/analysis/snapshots/:id → Get a specific snapshot
+// Enforce JWT authentication on all analysis endpoints
+router.use(authenticate);
+
+// POST /api/analysis/run → Run skill gap analysis for the authenticated user
+router.post('/run', runAnalysis);
 
 export default router;

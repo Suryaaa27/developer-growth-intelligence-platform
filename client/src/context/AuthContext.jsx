@@ -82,6 +82,19 @@ export const AuthProvider = ({ children }) => {
     };
   }, [logout]);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await authAPI.getMe();
+      if (response?.success && response?.data?.user) {
+        setUser(response.data.user);
+        return response.data.user;
+      }
+    } catch (err) {
+      console.warn('[AuthContext] refreshUser failed:', err.message);
+    }
+    return null;
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -91,6 +104,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !loading && !!token && !!user,
         login,
         logout,
+        refreshUser,
       }}
     >
       {children}

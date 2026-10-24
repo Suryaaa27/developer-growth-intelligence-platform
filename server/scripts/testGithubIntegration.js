@@ -43,10 +43,18 @@ const userBData = {
   password: 'Password123!',
 };
 
+const userCData = {
+  name: 'Dev Charlie (Unlinked)',
+  email: `charlie.dev.${timestamp}@example.com`,
+  password: 'Password123!',
+};
+
 let userAToken = null;
 let userAId = null;
 let userBToken = null;
 let userBId = null;
+let userCToken = null;
+let userCId = null;
 
 // Mock control state
 let mockGitHubScenario = 'NORMAL'; // 'NORMAL', 'NOT_FOUND', 'RATE_LIMITED', 'TIMEOUT', 'EMPTY', 'PAGINATED'
@@ -214,16 +222,22 @@ const runGithubIntegrationTests = async () => {
 
     const hashedUserPassword = await bcrypt.hash(userAData.password, 10);
     const [resA] = await pool.query(
-      'INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?)',
-      [userAData.name, userAData.email, hashedUserPassword, 'USER', 1]
+      'INSERT INTO users (name, email, password_hash, role, is_active, github_id, github_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [userAData.name, userAData.email, hashedUserPassword, 'USER', 1, 888001, 'alice']
     );
     userAId = resA.insertId;
 
     const [resB] = await pool.query(
-      'INSERT INTO users (name, email, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?)',
-      [userBData.name, userBData.email, hashedUserPassword, 'USER', 1]
+      'INSERT INTO users (name, email, password_hash, role, is_active, github_id, github_username) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [userBData.name, userBData.email, hashedUserPassword, 'USER', 1, 888002, 'bob']
     );
     userBId = resB.insertId;
+
+    const [resC] = await pool.query(
+      'INSERT INTO users (name, email, password_hash, role, is_active, github_id, github_username) VALUES (?, ?, ?, ?, ?, NULL, NULL)',
+      [userCData.name, userCData.email, hashedUserPassword, 'USER', 1]
+    );
+    userCId = resC.insertId;
 
     // Login Alice
     const loginARes = await request('/api/auth/login', {
@@ -239,7 +253,14 @@ const runGithubIntegrationTests = async () => {
     });
     userBToken = loginBRes.data?.data?.token;
 
-    console.log(`Setup complete. Alice ID: ${userAId}, Bob ID: ${userBId}\n`);
+    // Login Charlie
+    const loginCRes = await request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: userCData.email, password: userCData.password }),
+    });
+    userCToken = loginCRes.data?.data?.token;
+
+    console.log(`Setup complete. Alice ID: ${userAId}, Bob ID: ${userBId}, Charlie ID: ${userCId}\n`);
 
     // ─────────────────────────────────────────────────────────────
     // 1. Authentication & Security Enforcement
@@ -266,6 +287,24 @@ const runGithubIntegrationTests = async () => {
 
     // Reactivate user
     await pool.query('UPDATE users SET is_active = 1 WHERE id = ?', [userAId]);
+
+    // Test unlinked user sync rejection
+    const unlinkedSync = await request('/api/github/sync', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userCToken}` },
+      body: JSON.stringify({ githubUsername: 'charlie' }),
+    });
+    assert(unlinkedSync.status === 403, 'Unlinked user account returns 403 Forbidden on sync');
+    assert(unlinkedSync.data?.code === 'GITHUB_NOT_LINKED', 'Unlinked user receives GITHUB_NOT_LINKED error code');
+
+    // Test arbitrary username rejection (Alice attempting to sync Bob's repos)
+    const mismatchSync = await request('/api/github/sync', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userAToken}` },
+      body: JSON.stringify({ githubUsername: 'bob' }),
+    });
+    assert(mismatchSync.status === 403, 'Syncing arbitrary/unowned GitHub username returns 403 Forbidden');
+    assert(mismatchSync.data?.code === 'GITHUB_OWNERSHIP_MISMATCH', 'Arbitrary username receives GITHUB_OWNERSHIP_MISMATCH error code');
 
     // ─────────────────────────────────────────────────────────────
     // 2. Input Validation
@@ -309,7 +348,7 @@ const runGithubIntegrationTests = async () => {
     const notFoundSync = await request('/api/github/sync', {
       method: 'POST',
       headers: { Authorization: `Bearer ${userAToken}` },
-      body: JSON.stringify({ githubUsername: 'nonexistent-user-xyz' }),
+      body: JSON.stringify({ githubUsername: 'alice' }),
     });
     assert(notFoundSync.status === 404, 'GitHub 404 response returns 404 Not Found to client');
     assert(
@@ -321,7 +360,7 @@ const runGithubIntegrationTests = async () => {
     const rateLimitSync = await request('/api/github/sync', {
       method: 'POST',
       headers: { Authorization: `Bearer ${userAToken}` },
-      body: JSON.stringify({ githubUsername: 'anyuser' }),
+      body: JSON.stringify({ githubUsername: 'alice' }),
     });
     assert(rateLimitSync.status === 429, 'GitHub rate limit exceeded returns 429 Too Many Requests');
 
@@ -329,7 +368,7 @@ const runGithubIntegrationTests = async () => {
     const timeoutSync = await request('/api/github/sync', {
       method: 'POST',
       headers: { Authorization: `Bearer ${userAToken}` },
-      body: JSON.stringify({ githubUsername: 'anyuser' }),
+      body: JSON.stringify({ githubUsername: 'alice' }),
     });
     assert(timeoutSync.status === 504, 'GitHub timeout returns 504 Gateway Timeout');
 
@@ -337,7 +376,7 @@ const runGithubIntegrationTests = async () => {
     const emptySync = await request('/api/github/sync', {
       method: 'POST',
       headers: { Authorization: `Bearer ${userAToken}` },
-      body: JSON.stringify({ githubUsername: 'emptyuser' }),
+      body: JSON.stringify({ githubUsername: 'alice' }),
     });
     assert(emptySync.status === 200, 'User with 0 public repositories returns 200 OK');
     assert(emptySync.data?.data?.syncedCount === 0, 'syncedCount is 0 for empty public repos');
@@ -431,6 +470,10 @@ const runGithubIntegrationTests = async () => {
       if (userBId) {
         await pool.query('DELETE FROM repositories WHERE user_id = ?', [userBId]);
         await pool.query('DELETE FROM users WHERE id = ?', [userBId]);
+      }
+      if (userCId) {
+        await pool.query('DELETE FROM repositories WHERE user_id = ?', [userCId]);
+        await pool.query('DELETE FROM users WHERE id = ?', [userCId]);
       }
       console.log('Test accounts cleaned up.');
     } catch (cleanupErr) {

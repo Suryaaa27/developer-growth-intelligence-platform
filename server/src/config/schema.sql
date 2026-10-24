@@ -17,9 +17,13 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('USER', 'ADMIN') NOT NULL DEFAULT 'USER',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  github_id BIGINT UNSIGNED NULL,
+  github_username VARCHAR(100) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT uq_users_email UNIQUE (email)
+  CONSTRAINT uq_users_email UNIQUE (email),
+  CONSTRAINT uq_users_github_id UNIQUE (github_id),
+  INDEX idx_users_github_username (github_username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------------------

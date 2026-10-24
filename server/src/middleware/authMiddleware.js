@@ -41,7 +41,7 @@ export const authenticate = async (req, res, next) => {
 
     // Query MySQL to verify that user exists and is active
     const [rows] = await pool.query(
-      'SELECT id, name, email, role, is_active FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, name, email, role, is_active, github_id, github_username FROM users WHERE id = ? LIMIT 1',
       [decoded.id]
     );
 
@@ -68,6 +68,8 @@ export const authenticate = async (req, res, next) => {
       email: user.email,
       role: user.role,
       isActive: Boolean(user.is_active),
+      githubId: user.github_id ? Number(user.github_id) : null,
+      githubUsername: user.github_username || null,
     };
 
     next();

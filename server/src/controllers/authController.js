@@ -127,7 +127,7 @@ export const login = async (req, res) => {
 
     // 1. Fetch user by email
     const [rows] = await pool.query(
-      'SELECT id, name, email, password_hash, role, is_active FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, name, email, password_hash, role, is_active, github_id, github_username FROM users WHERE email = ? LIMIT 1',
       [trimmedEmail]
     );
 
@@ -171,6 +171,8 @@ export const login = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          githubId: user.github_id ? Number(user.github_id) : null,
+          githubUsername: user.github_username || null,
         },
         token,
       },
@@ -199,6 +201,8 @@ export const getMe = async (req, res) => {
           name: req.user.name,
           email: req.user.email,
           role: req.user.role,
+          githubId: req.user.githubId || null,
+          githubUsername: req.user.githubUsername || null,
         },
       },
     });
