@@ -147,7 +147,11 @@ const GitHubRepositories = () => {
       }
     } catch (err) {
       console.error('[GitHubRepositories sync error]:', err);
-      setSyncError(err.message || 'Synchronization request failed. Please check your network and try again.');
+      let displayMessage = err.message || 'Synchronization request failed. Please check your network and try again.';
+      if (err.retryGuidance) {
+        displayMessage = `${displayMessage} ${err.retryGuidance}`;
+      }
+      setSyncError(displayMessage);
     } finally {
       setIsSyncing(false);
     }

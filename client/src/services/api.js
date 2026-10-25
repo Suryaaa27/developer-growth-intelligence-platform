@@ -18,7 +18,14 @@ const request = async (endpoint, options = {}) => {
       sessionStorage.removeItem('token');
       window.dispatchEvent(new CustomEvent('auth:expired'));
     }
-    throw new Error(data.message || 'API request failed');
+    // Build a rich error that preserves extra fields from the API response body
+    // (e.g. retryAfter, retryGuidance, code) alongside the human-readable message.
+    const err = new Error(data.message || 'API request failed');
+    err.status = response.status;
+    if (data.code) err.code = data.code;
+    if (typeof data.retryAfter === 'number') err.retryAfter = data.retryAfter;
+    if (data.retryGuidance) err.retryGuidance = data.retryGuidance;
+    throw err;
   }
   return data;
 };

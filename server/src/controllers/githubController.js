@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { fetchUserRepos } from '../services/githubService.js';
+import { decryptToken } from '../utils/tokenEncryption.js';
 
 /**
  * GitHub Controller
@@ -64,7 +65,7 @@ export const syncRepos = async (req, res) => {
 
     // 1. Verify that user has a verified linked GitHub account
     const [userRows] = await pool.query(
-      'SELECT id, github_id, github_username FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, github_id, github_username, github_access_token FROM users WHERE id = ? LIMIT 1',
       [userId]
     );
 
@@ -118,10 +119,22 @@ export const syncRepos = async (req, res) => {
     // Strictly synchronize the verified linked account
     const trimmedUsername = verifiedUsername;
 
-    // 3. Fetch public repositories from GitHub
+    // 3. Decrypt the stored OAuth access token so the GitHub API call is authenticated.
+    //    Authenticated requests are allowed 5,000 requests/hr vs 60/hr for anonymous.
+    //    If the token is absent or decryption fails, fall back to anonymous access.
+    let accessToken = null;
+    if (dbUser.github_access_token) {
+      try {
+        accessToken = decryptToken(dbUser.github_access_token);
+      } catch (decryptErr) {
+        console.warn('[syncRepos] Failed to decrypt stored GitHub token; falling back to anonymous:', decryptErr.message);
+      }
+    }
+
+    // 4. Fetch public repositories from GitHub (authenticated when token is available)
     let fetchedRepos;
     try {
-      fetchedRepos = await fetchUserRepos(trimmedUsername);
+      fetchedRepos = await fetchUserRepos(trimmedUsername, accessToken ? { accessToken } : null);
     } catch (err) {
       if (err.status === 404) {
         return res.status(404).json({
@@ -129,11 +142,20 @@ export const syncRepos = async (req, res) => {
           message: `GitHub user '${trimmedUsername}' was not found.`,
         });
       }
-      if (err.status === 429) {
-        return res.status(429).json({
+      if (err.status === 429 || err.code === 'GITHUB_RATE_LIMITED' || err.code === 'GITHUB_SECONDARY_RATE_LIMITED') {
+        const responseBody = {
           success: false,
-          message: 'GitHub API rate limit exceeded. Please try again later.',
-        });
+          code: err.code || 'GITHUB_RATE_LIMITED',
+          message: err.message || 'GitHub API rate limit exceeded. Please try again later.',
+        };
+        if (typeof err.retryAfter === 'number') {
+          responseBody.retryAfter = err.retryAfter;
+          const minutes = Math.ceil(err.retryAfter / 60);
+          responseBody.retryGuidance = err.retryAfter > 0
+            ? `Rate limit resets in approximately ${minutes} minute${minutes !== 1 ? 's' : ''}. Please wait before retrying.`
+            : 'Rate limit should reset shortly. Please try again in a moment.';
+        }
+        return res.status(429).json(responseBody);
       }
       if (err.status === 504) {
         return res.status(504).json({

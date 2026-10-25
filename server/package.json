@@ -15,7 +15,8 @@
     "test:oauth": "node scripts/testGithubOAuth.js",
     "test:github:smoke": "node scripts/testGithubRealSmoke.js",
     "test:skills": "node scripts/testSkillAnalysis.js",
-    "test:persistence": "node scripts/testSkillPersistence.js"
+    "test:persistence": "node scripts/testSkillPersistence.js",
+    "test:ratelimit": "node scripts/testRateLimitAndAuth.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

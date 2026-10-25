@@ -113,12 +113,39 @@ export const fetchUserRepos = async (githubUsername, optionsOrToken = null) => {
     // Handle Rate Limiting / Forbidden
     if (response.status === 403 || response.status === 429) {
       const remaining = response.headers?.get ? response.headers.get('x-ratelimit-remaining') : null;
+      const resetHeader = response.headers?.get ? response.headers.get('x-ratelimit-reset') : null;
+      const retryAfterHeader = response.headers?.get ? response.headers.get('retry-after') : null;
+
+      // Compute seconds until rate limit resets (prefer x-ratelimit-reset epoch, then retry-after)
+      let retryAfterSeconds = null;
+      if (resetHeader) {
+        const resetEpoch = parseInt(resetHeader, 10);
+        if (!isNaN(resetEpoch)) {
+          retryAfterSeconds = Math.max(0, resetEpoch - Math.floor(Date.now() / 1000));
+        }
+      } else if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10);
+        if (!isNaN(parsed)) retryAfterSeconds = parsed;
+      }
+
+      // Primary rate limit (remaining === '0') or explicit 429
       if (remaining === '0' || response.status === 429) {
         const err = new Error('GitHub API rate limit exceeded. Please try again later.');
         err.status = 429;
         err.code = 'GITHUB_RATE_LIMITED';
+        if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
         throw err;
       }
+
+      // Secondary rate limit: GitHub returns 403 with a retry-after header
+      if (retryAfterHeader) {
+        const err = new Error('GitHub API secondary rate limit triggered. Please try again later.');
+        err.status = 429;
+        err.code = 'GITHUB_SECONDARY_RATE_LIMITED';
+        if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
+        throw err;
+      }
+
       const err = new Error('GitHub API request was forbidden.');
       err.status = 403;
       err.code = 'GITHUB_FORBIDDEN';
@@ -213,12 +240,34 @@ export const fetchRepoLanguages = async (fullRepoName, accessToken = null, _opti
 
   if (response.status === 403 || response.status === 429) {
     const remaining = response.headers?.get ? response.headers.get('x-ratelimit-remaining') : null;
+    const resetHeader = response.headers?.get ? response.headers.get('x-ratelimit-reset') : null;
+    const retryAfterHeader = response.headers?.get ? response.headers.get('retry-after') : null;
+
+    let retryAfterSeconds = null;
+    if (resetHeader) {
+      const resetEpoch = parseInt(resetHeader, 10);
+      if (!isNaN(resetEpoch)) retryAfterSeconds = Math.max(0, resetEpoch - Math.floor(Date.now() / 1000));
+    } else if (retryAfterHeader) {
+      const parsed = parseInt(retryAfterHeader, 10);
+      if (!isNaN(parsed)) retryAfterSeconds = parsed;
+    }
+
     if (remaining === '0' || response.status === 429) {
       const err = new Error('GitHub API rate limit exceeded. Please try again later.');
       err.status = 429;
       err.code = 'GITHUB_RATE_LIMITED';
+      if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
       throw err;
     }
+
+    if (retryAfterHeader) {
+      const err = new Error('GitHub API secondary rate limit triggered. Please try again later.');
+      err.status = 429;
+      err.code = 'GITHUB_SECONDARY_RATE_LIMITED';
+      if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
+      throw err;
+    }
+
     const err = new Error('GitHub API request was forbidden.');
     err.status = 403;
     err.code = 'GITHUB_FORBIDDEN';
@@ -305,12 +354,34 @@ export const fetchFileContent = async (fullRepoName, filePath, accessToken = nul
 
   if (response.status === 403 || response.status === 429) {
     const remaining = response.headers?.get ? response.headers.get('x-ratelimit-remaining') : null;
+    const resetHeader = response.headers?.get ? response.headers.get('x-ratelimit-reset') : null;
+    const retryAfterHeader = response.headers?.get ? response.headers.get('retry-after') : null;
+
+    let retryAfterSeconds = null;
+    if (resetHeader) {
+      const resetEpoch = parseInt(resetHeader, 10);
+      if (!isNaN(resetEpoch)) retryAfterSeconds = Math.max(0, resetEpoch - Math.floor(Date.now() / 1000));
+    } else if (retryAfterHeader) {
+      const parsed = parseInt(retryAfterHeader, 10);
+      if (!isNaN(parsed)) retryAfterSeconds = parsed;
+    }
+
     if (remaining === '0' || response.status === 429) {
       const err = new Error('GitHub API rate limit exceeded. Please try again later.');
       err.status = 429;
       err.code = 'GITHUB_RATE_LIMITED';
+      if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
       throw err;
     }
+
+    if (retryAfterHeader) {
+      const err = new Error('GitHub API secondary rate limit triggered. Please try again later.');
+      err.status = 429;
+      err.code = 'GITHUB_SECONDARY_RATE_LIMITED';
+      if (retryAfterSeconds !== null) err.retryAfter = retryAfterSeconds;
+      throw err;
+    }
+
     const err = new Error('GitHub API request was forbidden.');
     err.status = 403;
     err.code = 'GITHUB_FORBIDDEN';

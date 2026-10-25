@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { generateOAuthState, validateAndConsumeOAuthState } from '../utils/oauthState.js';
+import { encryptToken } from '../utils/tokenEncryption.js';
 
 /**
  * Controller: GitHub OAuth Account Linking
@@ -197,10 +198,20 @@ export const handleGitHubCallback = async (req, res) => {
       }
     }
 
-    // 8. Save verified github_id and github_username to initiating user record
+    // 8. Encrypt and save the access token alongside verified github_id / github_username.
+    //    The token is stored encrypted at rest (AES-256-GCM).  It is NEVER returned
+    //    to the frontend or logged.  Null is stored if encryption unexpectedly fails
+    //    so that the OAuth link still succeeds but sync will fall back to anonymous access.
+    let encryptedToken = null;
+    try {
+      encryptedToken = encryptToken(accessToken);
+    } catch (encErr) {
+      console.error('[handleGitHubCallback] Token encryption failed — token will not be stored:', encErr.message);
+    }
+
     await pool.query(
-      'UPDATE users SET github_id = ?, github_username = ? WHERE id = ?',
-      [githubId, githubUsername, userId]
+      'UPDATE users SET github_id = ?, github_username = ?, github_access_token = ? WHERE id = ?',
+      [githubId, githubUsername, encryptedToken, userId]
     );
 
     // 9. Redirect to frontend with safe success indicator
