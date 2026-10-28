@@ -5,7 +5,8 @@ import { FILE_EVIDENCE_MAP } from '../analyzers/fileEvidenceAnalyzer.js';
 
 /**
  * Skill Controller
- * Handles querying aggregated skills and granular skill evidence for the authenticated user.
+ * Handles querying aggregated skills and granular skill evidence for the authenticated user
+ * with repository ownership transparency.
  */
 
 // Scoring constants matching skillDetectionService
@@ -71,6 +72,8 @@ export const getUserSkills = async (req, res) => {
       });
     }
 
+    const userGithub = (req.user?.githubUsername || '').trim().toLowerCase();
+
     const [rows] = await pool.query(
       `SELECT 
          se.id,
@@ -83,7 +86,9 @@ export const getUserSkills = async (req, res) => {
          se.detected_at,
          r.id AS repo_id,
          r.repo_name,
-         r.full_name AS repo_full_name
+         r.full_name AS repo_full_name,
+         r.owner_login,
+         r.is_fork
        FROM skill_evidence se
        JOIN repositories r ON se.repository_id = r.id
        WHERE r.user_id = ?
@@ -107,10 +112,16 @@ export const getUserSkills = async (req, res) => {
       const canonicalName = row.skill_name;
       const existing = skillMap.get(canonicalName);
 
+      const ownerLogin = row.owner_login || (row.repo_full_name ? row.repo_full_name.split('/')[0] : null);
+      const isOwner = userGithub ? (ownerLogin || '').toLowerCase() === userGithub : true;
+
       const repoInfo = {
         id: row.repo_id,
         repoName: row.repo_name,
         fullName: row.repo_full_name,
+        ownerLogin,
+        isOwner,
+        isFork: Boolean(row.is_fork),
       };
 
       if (!existing) {
@@ -150,6 +161,9 @@ export const getUserSkills = async (req, res) => {
       const primaryEvidenceType = pickPrimaryEvidenceType(s.evidenceTypes);
       const category = resolveSkillCategory(s.skillName, primaryEvidenceType);
 
+      const ownedRepos = s.repositories.filter((r) => r.isOwner);
+      const collabRepos = s.repositories.filter((r) => !r.isOwner);
+
       return {
         skillName: s.skillName,
         category,
@@ -158,6 +172,11 @@ export const getUserSkills = async (req, res) => {
         repositoryCount: repoCount,
         contributingRepositories: s.repoNames,
         repositories: s.repositories,
+        ownedRepositories: ownedRepos.map((r) => r.fullName),
+        collaborationRepositories: collabRepos.map((r) => r.fullName),
+        ownedRepositoryCount: ownedRepos.length,
+        collaborationRepositoryCount: collabRepos.length,
+        isOwner: ownedRepos.length > 0,
         lastDetectedAt: s.lastDetectedAt,
       };
     });
@@ -211,6 +230,8 @@ export const getSkillEvidence = async (req, res) => {
       });
     }
 
+    const userGithub = (req.user?.githubUsername || '').trim().toLowerCase();
+
     // Query MySQL skill_evidence joined to repositories with strict user ownership filter
     const [rows] = await pool.query(
       `SELECT 
@@ -224,7 +245,9 @@ export const getSkillEvidence = async (req, res) => {
          se.detected_at,
          r.id AS repo_id,
          r.repo_name,
-         r.full_name AS repo_full_name
+         r.full_name AS repo_full_name,
+         r.owner_login,
+         r.is_fork
        FROM skill_evidence se
        JOIN repositories r ON se.repository_id = r.id
        WHERE r.user_id = ? AND LOWER(se.skill_name) = LOWER(?)
@@ -252,20 +275,27 @@ export const getSkillEvidence = async (req, res) => {
     const primaryType = pickPrimaryEvidenceType(rows.map((r) => r.evidence_type));
     const category = resolveSkillCategory(canonicalSkillName, primaryType);
 
-    const evidenceRecords = rows.map((r) => ({
-      id: r.id,
-      repositoryId: r.repository_id,
-      repoId: r.repo_id,
-      repoName: r.repo_name,
-      repositoryName: r.repo_name,
-      fullName: r.repo_full_name,
-      repositoryFullName: r.repo_full_name,
-      evidenceType: r.evidence_type,
-      evidenceDetails: r.evidence_details,
-      evidenceFilePath: r.evidence_file_path,
-      confidenceScore: Number(r.confidence_score) || 0,
-      detectedAt: r.detected_at,
-    }));
+    const evidenceRecords = rows.map((r) => {
+      const ownerLogin = r.owner_login || (r.repo_full_name ? r.repo_full_name.split('/')[0] : null);
+      const isOwner = userGithub ? (ownerLogin || '').toLowerCase() === userGithub : true;
+      return {
+        id: r.id,
+        repositoryId: r.repository_id,
+        repoId: r.repo_id,
+        repoName: r.repo_name,
+        repositoryName: r.repo_name,
+        fullName: r.repo_full_name,
+        repositoryFullName: r.repo_full_name,
+        ownerLogin,
+        isOwner,
+        isFork: Boolean(r.is_fork),
+        evidenceType: r.evidence_type,
+        evidenceDetails: r.evidence_details,
+        evidenceFilePath: r.evidence_file_path,
+        confidenceScore: Number(r.confidence_score) || 0,
+        detectedAt: r.detected_at,
+      };
+    });
 
     return res.status(200).json({
       success: true,

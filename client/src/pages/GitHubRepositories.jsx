@@ -27,8 +27,10 @@ const GitHubRepositories = () => {
   const { user, refreshUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // State for repository data
-  const [repositories, setRepositories] = useState([]);
+  // State for repository data: separated into owned and collaborations
+  const [ownedRepositories, setOwnedRepositories] = useState([]);
+  const [collaborations, setCollaborations] = useState([]);
+  const [activeTab, setActiveTab] = useState('owned'); // 'owned' | 'collaborations'
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
@@ -49,8 +51,11 @@ const GitHubRepositories = () => {
     setLoadError(null);
     try {
       const response = await githubAPI.getRepos();
-      if (response?.success && Array.isArray(response?.data?.repositories)) {
-        setRepositories(response.data.repositories);
+      if (response?.success && response?.data) {
+        const owned = Array.isArray(response.data.repositories) ? response.data.repositories : [];
+        const collabs = Array.isArray(response.data.collaborations) ? response.data.collaborations : [];
+        setOwnedRepositories(owned);
+        setCollaborations(collabs);
       } else {
         setLoadError(response?.message || 'Failed to load repositories.');
       }
@@ -133,12 +138,17 @@ const GitHubRepositories = () => {
       const response = await githubAPI.syncRepos({ githubUsername: user.githubUsername });
       if (response?.success) {
         const syncedCount = response.data?.syncedCount ?? 0;
-        setSyncSuccess(
-          response.message || `Successfully imported ${syncedCount} public repositories from @${user.githubUsername}.`
-        );
-        // Refresh local repository list with updated records
-        if (Array.isArray(response.data?.repositories)) {
-          setRepositories(response.data.repositories);
+        const collabCount = response.data?.collaborationCount ?? 0;
+        let msg = response.message || `Successfully imported ${syncedCount} public repositories from @${user.githubUsername}.`;
+        if (collabCount > 0) {
+          msg += ` (${collabCount} collaboration repositories identified).`;
+        }
+        setSyncSuccess(msg);
+
+        // Update local state with fresh data
+        if (response.data) {
+          setOwnedRepositories(Array.isArray(response.data.repositories) ? response.data.repositories : []);
+          setCollaborations(Array.isArray(response.data.collaborations) ? response.data.collaborations : []);
         } else {
           await fetchRepositories();
         }
@@ -157,29 +167,35 @@ const GitHubRepositories = () => {
     }
   };
 
-  // Derive unique languages from loaded repositories
+  // Active list based on selected tab
+  const activeRepositories = useMemo(() => {
+    return activeTab === 'collaborations' ? collaborations : ownedRepositories;
+  }, [activeTab, collaborations, ownedRepositories]);
+
+  // Derive unique languages from active list
   const availableLanguages = useMemo(() => {
     const langs = new Set();
-    repositories.forEach((repo) => {
+    activeRepositories.forEach((repo) => {
       if (repo.primaryLanguage) {
         langs.add(repo.primaryLanguage);
       }
     });
     return Array.from(langs).sort();
-  }, [repositories]);
+  }, [activeRepositories]);
 
   // Filtered repositories based on search and language filter
   const filteredRepos = useMemo(() => {
-    return repositories.filter((repo) => {
+    return activeRepositories.filter((repo) => {
       const name = (repo.repoName || '').toLowerCase();
       const desc = (repo.description || '').toLowerCase();
+      const owner = (repo.ownerLogin || '').toLowerCase();
       const term = searchTerm.toLowerCase();
-      const matchesSearch = name.includes(term) || desc.includes(term);
+      const matchesSearch = name.includes(term) || desc.includes(term) || owner.includes(term);
       const matchesLanguage =
         selectedLanguage === 'All' || repo.primaryLanguage === selectedLanguage;
       return matchesSearch && matchesLanguage;
     });
-  }, [repositories, searchTerm, selectedLanguage]);
+  }, [activeRepositories, searchTerm, selectedLanguage]);
 
   return (
     <AppLayout>
@@ -189,13 +205,18 @@ const GitHubRepositories = () => {
           <div>
             <h1 className="page-header__title">GitHub Repositories</h1>
             <p className="page-header__subtitle">
-              Inspect synchronized public repositories and code metadata analyzed for technical competency evidence.
+              Inspect synchronized repositories and code metadata analyzed for technical competency evidence.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="badge badge--neutral">
-              {repositories.length} {repositories.length === 1 ? 'Repository' : 'Repositories'} Synced
+            <span className="badge badge--green">
+              {ownedRepositories.length} {ownedRepositories.length === 1 ? 'Repository' : 'Repositories'} Owned
             </span>
+            {collaborations.length > 0 && (
+              <span className="badge badge--amber">
+                {collaborations.length} {collaborations.length === 1 ? 'Collaboration' : 'Collaborations'}
+              </span>
+            )}
             <button
               type="button"
               onClick={fetchRepositories}
@@ -231,7 +252,7 @@ const GitHubRepositories = () => {
             </div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
               {user?.githubUsername
-                ? `Repositories will be synchronized directly for your verified GitHub profile (@${user.githubUsername}).`
+                ? `Repositories are synchronized directly for your verified GitHub profile (@${user.githubUsername}). Repositories you own are distinguished from collaborations.`
                 : 'Authenticate with GitHub to securely link your developer profile and import verified repositories.'}
             </p>
           </div>
@@ -367,8 +388,34 @@ const GitHubRepositories = () => {
         </div>
       )}
 
-      {/* Filter and Search Bar (Shown when repositories exist) */}
-      {repositories.length > 0 && (
+      {/* View Toggle Tabs: My Repositories vs Collaborations */}
+      <div className="flex items-center gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          id="tab-my-repositories"
+          onClick={() => {
+            setActiveTab('owned');
+            setSelectedLanguage('All');
+          }}
+          className={`btn btn--sm ${activeTab === 'owned' ? 'btn--primary' : 'btn--secondary'}`}
+        >
+          My Repositories ({ownedRepositories.length})
+        </button>
+        <button
+          type="button"
+          id="tab-collaborations"
+          onClick={() => {
+            setActiveTab('collaborations');
+            setSelectedLanguage('All');
+          }}
+          className={`btn btn--sm ${activeTab === 'collaborations' ? 'btn--primary' : 'btn--secondary'}`}
+        >
+          Collaborations ({collaborations.length})
+        </button>
+      </div>
+
+      {/* Filter and Search Bar (Shown when repositories exist in active tab) */}
+      {activeRepositories.length > 0 && (
         <div className="filter-bar card card--compact mb-6">
           <div className="search-input-wrapper">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -378,7 +425,7 @@ const GitHubRepositories = () => {
             <input
               type="text"
               className="form-input"
-              placeholder="Search repositories by name or keyword..."
+              placeholder={`Search ${activeTab === 'collaborations' ? 'collaborations' : 'my repositories'} by name or owner...`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -395,7 +442,7 @@ const GitHubRepositories = () => {
               value={selectedLanguage}
               onChange={(e) => setSelectedLanguage(e.target.value)}
             >
-              <option value="All">All Languages ({repositories.length})</option>
+              <option value="All">All Languages ({activeRepositories.length})</option>
               {availableLanguages.map((lang) => (
                 <option key={lang} value={lang}>
                   {lang}
@@ -417,16 +464,21 @@ const GitHubRepositories = () => {
           }}
         >
           <div className="flex items-center justify-between" style={{ marginBottom: 'var(--space-3)' }}>
-            <div>
+            <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
               <span style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--fw-semibold)', color: 'var(--color-text-primary)' }}>
                 {selectedRepo.repoName}
               </span>
-              <span className="badge badge--blue" style={{ marginLeft: 'var(--space-3)' }}>
+              <span className="badge badge--blue">
                 {selectedRepo.primaryLanguage || 'Unspecified'}
               </span>
-              <span className="badge badge--neutral" style={{ marginLeft: 'var(--space-2)' }}>
+              <span className="badge badge--neutral">
                 {selectedRepo.fullName}
               </span>
+              {selectedRepo.isOwner ? (
+                <span className="badge badge--green">Owned</span>
+              ) : (
+                <span className="badge badge--amber">Collaboration (Owner: @{selectedRepo.ownerLogin})</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {selectedRepo.htmlUrl && (
@@ -467,6 +519,14 @@ const GitHubRepositories = () => {
               </p>
               <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-medium)', color: 'var(--color-text-primary)', margin: 0 }}>
                 {selectedRepo.githubRepoId}
+              </p>
+            </div>
+            <div>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-disabled)', textTransform: 'uppercase', marginBottom: '2px' }}>
+                Ownership Status
+              </p>
+              <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-medium)', color: 'var(--color-text-primary)', margin: 0 }}>
+                {selectedRepo.isOwner ? 'Owned by You' : `Collaborator (Owner: @${selectedRepo.ownerLogin})`}
               </p>
             </div>
             <div>
@@ -529,15 +589,23 @@ const GitHubRepositories = () => {
       {/* Loaded Repositories Content */}
       {!loading && !loadError && (
         <>
-          {repositories.length === 0 ? (
-            /* Empty State: No Repositories Synchronized Yet */
+          {activeRepositories.length === 0 ? (
+            /* Empty State for the active tab */
             <div className="card empty-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
                 <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
               </svg>
-              <p className="empty-state__title">No Repositories Synchronized Yet</p>
+              <p className="empty-state__title">
+                {activeTab === 'collaborations'
+                  ? 'No Collaboration Repositories Found'
+                  : 'No Owned Repositories Synchronized Yet'}
+              </p>
               <p className="empty-state__desc">
-                Enter a public GitHub username in the box above and click <strong>Sync Repositories</strong> to import code metadata for skill analysis.
+                {activeTab === 'collaborations'
+                  ? 'Repositories shared with you by other developers or organizations will appear here when you synchronize.'
+                  : user?.githubUsername
+                  ? `Click Sync Repositories to import repositories owned by @${user.githubUsername}.`
+                  : 'Connect your GitHub account above and synchronize repositories to populate your skill evidence.'}
               </p>
             </div>
           ) : filteredRepos.length > 0 ? (
@@ -553,6 +621,9 @@ const GitHubRepositories = () => {
                   stars={0}
                   forks={0}
                   updatedAt={formatDate(repo.updatedAt)}
+                  ownerLogin={repo.ownerLogin}
+                  isOwner={repo.isOwner}
+                  isFork={repo.isFork}
                   onViewDetails={() => setSelectedRepo(repo)}
                 />
               ))}

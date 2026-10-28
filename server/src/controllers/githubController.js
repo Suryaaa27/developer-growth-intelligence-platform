@@ -1,45 +1,89 @@
 import pool from '../config/db.js';
-import { fetchUserRepos } from '../services/githubService.js';
+import { fetchUserRepos, fetchUserCollaborations } from '../services/githubService.js';
 import { decryptToken } from '../utils/tokenEncryption.js';
 
 /**
  * GitHub Controller
- * Handles fetching, persisting, and querying user-synchronized GitHub repository data.
+ * Handles fetching, persisting, and querying user-synchronized GitHub repository data
+ * with strict backend ownership enforcement separating owned repositories from collaborations.
  */
 
 /**
+ * Formats a database repository record for client response.
+ */
+const formatRepoResponse = (r, isOwner) => ({
+  id: r.id,
+  userId: r.user_id,
+  githubRepoId: String(r.github_repo_id),
+  repoName: r.repo_name,
+  fullName: r.full_name,
+  ownerLogin: r.owner_login || (r.full_name ? r.full_name.split('/')[0] : null),
+  isOwner,
+  isFork: Boolean(r.is_fork),
+  description: r.description,
+  primaryLanguage: r.primary_language,
+  htmlUrl: r.html_url,
+  lastAnalyzedAt: r.last_analyzed_at,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+/**
  * GET /api/github/repos
- * Retrieves all synchronized GitHub repositories belonging to the currently authenticated user.
+ * Retrieves synchronized GitHub repositories belonging to the currently authenticated user.
+ * Supports optional query param `?type=owned` (default), `?type=collaborations`, or `?type=all`.
+ * The default view and main count strictly include repositories owned by the connected user.
  */
 export const getRepos = async (req, res) => {
   try {
     const userId = req.user.id;
+    const requestedType = (req.query.type || 'owned').toLowerCase();
 
     const [rows] = await pool.query(
-      `SELECT id, user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, last_analyzed_at, created_at, updated_at
+      `SELECT id, user_id, github_repo_id, repo_name, full_name, owner_login, description, primary_language, html_url, is_fork, last_analyzed_at, created_at, updated_at
        FROM repositories
        WHERE user_id = ?
        ORDER BY updated_at DESC`,
       [userId]
     );
 
+    const userGithub = (req.user.githubUsername || '').trim().toLowerCase();
+    const owned = [];
+    const collaborations = [];
+
+    for (const r of rows) {
+      const owner = (r.owner_login || (r.full_name ? r.full_name.split('/')[0] : '')).toLowerCase();
+      // An owned repository has an owner matching the verified linked GitHub username.
+      // If user has not linked GitHub or in anonymous test context, treat as owner unless owner differs from known profile.
+      const isOwner = userGithub ? owner === userGithub : true;
+      if (isOwner) {
+        owned.push(formatRepoResponse(r, true));
+      } else {
+        collaborations.push(formatRepoResponse(r, false));
+      }
+    }
+
+    let mainList;
+    if (requestedType === 'collaborations') {
+      mainList = collaborations;
+    } else if (requestedType === 'all') {
+      mainList = [...owned, ...collaborations];
+    } else {
+      mainList = owned;
+    }
+
     return res.status(200).json({
       success: true,
       data: {
-        repositories: rows.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          githubRepoId: String(r.github_repo_id),
-          repoName: r.repo_name,
-          fullName: r.full_name,
-          description: r.description,
-          primaryLanguage: r.primary_language,
-          htmlUrl: r.html_url,
-          lastAnalyzedAt: r.last_analyzed_at,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })),
-        count: rows.length,
+        repositories: mainList,
+        collaborations,
+        owned,
+        all: [...owned, ...collaborations],
+        count: mainList.length,
+        ownedCount: owned.length,
+        collaborationCount: collaborations.length,
+        totalCount: rows.length,
+        verifiedUsername: req.user.githubUsername || null,
       },
     });
   } catch (error) {
@@ -55,6 +99,10 @@ export const getRepos = async (req, res) => {
  * POST /api/github/sync
  * Fetches public repositories for a specified GitHub username and synchronizes them
  * into the database under the authenticated user's ID.
+ *
+ * Enforces ownership: only repositories for the verified linked account (and legitimate
+ * collaborations when OAuth token is available) are persisted. Prunes stale or unowned
+ * repositories retained from previous test syncs.
  *
  * Body: { githubUsername: string }
  */
@@ -120,8 +168,6 @@ export const syncRepos = async (req, res) => {
     const trimmedUsername = verifiedUsername;
 
     // 3. Decrypt the stored OAuth access token so the GitHub API call is authenticated.
-    //    Authenticated requests are allowed 5,000 requests/hr vs 60/hr for anonymous.
-    //    If the token is absent or decryption fails, fall back to anonymous access.
     let accessToken = null;
     if (dbUser.github_access_token) {
       try {
@@ -131,7 +177,7 @@ export const syncRepos = async (req, res) => {
       }
     }
 
-    // 4. Fetch public repositories from GitHub (authenticated when token is available)
+    // 4. Fetch public repositories from GitHub for verified user
     let fetchedRepos;
     try {
       fetchedRepos = await fetchUserRepos(trimmedUsername, accessToken ? { accessToken } : null);
@@ -169,14 +215,34 @@ export const syncRepos = async (req, res) => {
       });
     }
 
-    // 4. Handle empty public repositories list
-    if (!fetchedRepos || fetchedRepos.length === 0) {
+    // Also fetch collaboration repositories when OAuth access token is available
+    let collaborationRepos = [];
+    if (accessToken) {
+      try {
+        collaborationRepos = await fetchUserCollaborations(accessToken);
+      } catch (collabErr) {
+        console.warn('[syncRepos] fetchUserCollaborations error:', collabErr.message);
+      }
+    }
+
+    const allToSync = [...(fetchedRepos || []), ...collaborationRepos];
+
+    // Handle empty repositories list
+    if (allToSync.length === 0) {
+      // Clean up any existing repositories in DB for this user
+      await pool.query('DELETE FROM repositories WHERE user_id = ?', [userId]);
+
       return res.status(200).json({
         success: true,
         message: `GitHub user '${trimmedUsername}' has no public repositories.`,
         data: {
           repositories: [],
+          collaborations: [],
+          owned: [],
+          all: [],
           count: 0,
+          ownedCount: 0,
+          collaborationCount: 0,
           syncedCount: 0,
         },
       });
@@ -193,30 +259,47 @@ export const syncRepos = async (req, res) => {
           github_repo_id,
           repo_name,
           full_name,
+          owner_login,
           description,
           primary_language,
           html_url,
+          is_fork,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ON DUPLICATE KEY UPDATE
           repo_name = VALUES(repo_name),
           full_name = VALUES(full_name),
+          owner_login = VALUES(owner_login),
           description = VALUES(description),
           primary_language = VALUES(primary_language),
           html_url = VALUES(html_url),
+          is_fork = VALUES(is_fork),
           updated_at = NOW()
       `;
 
-      for (const repo of fetchedRepos) {
+      for (const repo of allToSync) {
+        const ownerLogin = repo.ownerLogin || (repo.fullName ? repo.fullName.split('/')[0] : trimmedUsername);
         await connection.query(upsertSql, [
           userId,
           repo.githubRepoId,
           repo.name ? repo.name.slice(0, 191) : 'unnamed-repo',
           repo.fullName ? repo.fullName.slice(0, 191) : 'unknown/repo',
+          ownerLogin ? ownerLogin.slice(0, 100) : trimmedUsername,
           repo.description || null,
           repo.primaryLanguage ? repo.primaryLanguage.slice(0, 60) : null,
           repo.htmlUrl ? repo.htmlUrl.slice(0, 255) : '',
+          Boolean(repo.isFork),
         ]);
+      }
+
+      // 5b. Prune stale repositories: Remove any repository for this user that is NOT
+      // part of the verified sync payload (e.g. friend's repositories tested previously)
+      const validRepoIds = allToSync.map((r) => r.githubRepoId);
+      if (validRepoIds.length > 0) {
+        await connection.query(
+          'DELETE FROM repositories WHERE user_id = ? AND github_repo_id NOT IN (?)',
+          [userId, validRepoIds]
+        );
       }
 
       await connection.commit();
@@ -229,31 +312,37 @@ export const syncRepos = async (req, res) => {
 
     // 6. Fetch the updated full repository list for the user
     const [userRepos] = await pool.query(
-      `SELECT id, user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, last_analyzed_at, created_at, updated_at
+      `SELECT id, user_id, github_repo_id, repo_name, full_name, owner_login, description, primary_language, html_url, is_fork, last_analyzed_at, created_at, updated_at
        FROM repositories
        WHERE user_id = ?
        ORDER BY updated_at DESC`,
       [userId]
     );
 
+    const owned = [];
+    const collaborations = [];
+
+    for (const r of userRepos) {
+      const owner = (r.owner_login || (r.full_name ? r.full_name.split('/')[0] : '')).toLowerCase();
+      const isOwner = owner === trimmedUsername.toLowerCase();
+      if (isOwner) {
+        owned.push(formatRepoResponse(r, true));
+      } else {
+        collaborations.push(formatRepoResponse(r, false));
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: `Successfully synchronized ${fetchedRepos.length} public repositories from @${trimmedUsername}.`,
+      message: `Successfully synchronized ${owned.length} public ${owned.length === 1 ? 'repository' : 'repositories'} from @${trimmedUsername}${collaborations.length > 0 ? ` and ${collaborations.length} collaboration ${collaborations.length === 1 ? 'repository' : 'repositories'}` : ''}.`,
       data: {
-        repositories: userRepos.map((r) => ({
-          id: r.id,
-          userId: r.user_id,
-          githubRepoId: String(r.github_repo_id),
-          repoName: r.repo_name,
-          fullName: r.full_name,
-          description: r.description,
-          primaryLanguage: r.primary_language,
-          htmlUrl: r.html_url,
-          lastAnalyzedAt: r.last_analyzed_at,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-        })),
-        count: userRepos.length,
+        repositories: owned,
+        collaborations,
+        owned,
+        all: [...owned, ...collaborations],
+        count: owned.length,
+        ownedCount: owned.length,
+        collaborationCount: collaborations.length,
         syncedCount: fetchedRepos.length,
       },
     });

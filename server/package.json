@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js",
     "admin:create": "node scripts/createAdmin.js",
     "migrate": "node scripts/migrate.js",
+    "seed:roles": "node scripts/migrations/003_seed_role_requirements.js",
     "test:rbac": "node scripts/testRbac.js",
     "test:admin": "node scripts/testAdminEndpoints.js",
     "test:github": "node scripts/testGithubIntegration.js",
@@ -16,7 +17,8 @@
     "test:github:smoke": "node scripts/testGithubRealSmoke.js",
     "test:skills": "node scripts/testSkillAnalysis.js",
     "test:persistence": "node scripts/testSkillPersistence.js",
-    "test:ratelimit": "node scripts/testRateLimitAndAuth.js"
+    "test:ratelimit": "node scripts/testRateLimitAndAuth.js",
+    "test:ownership": "node scripts/testRepoOwnershipAndFiltering.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

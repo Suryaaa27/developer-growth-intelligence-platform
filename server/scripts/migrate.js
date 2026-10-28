@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import pool from '../src/config/db.js';
+import { runMigration as runOwnershipMigration } from './migrations/002_add_repo_ownership.js';
+import { runMigration as runRoleSeedMigration } from './migrations/003_seed_role_requirements.js';
 
 /**
- * Migration Script: 001_create_recommendation_templates
- * Non-destructive migration to add the recommendation_templates table.
+ * Migration Script
+ * Runs all non-destructive migrations in sequence.
  */
 const migrate = async () => {
   try {
@@ -26,8 +28,11 @@ const migrate = async () => {
     await pool.query(createTableQuery);
     console.log('[Migration] Table recommendation_templates created successfully.');
 
-    const [cols] = await pool.query('DESCRIBE recommendation_templates');
-    console.log('[Migration] Table structure verified:', cols.map(c => `${c.Field} (${c.Type})`));
+    // Migration 002: Add repository ownership and fork tracking
+    await runOwnershipMigration();
+
+    // Migration 003: Seed default role requirement templates (idempotent INSERT IGNORE)
+    await runRoleSeedMigration();
 
     process.exit(0);
   } catch (error) {

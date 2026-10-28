@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { detectSkillsFromRepo } from '../services/skillDetectionService.js';
+import { decryptToken } from '../utils/tokenEncryption.js';
 
 /**
  * Analysis Controller
@@ -8,7 +9,7 @@ import { detectSkillsFromRepo } from '../services/skillDetectionService.js';
 
 /**
  * POST /api/analysis/run
- * Initiates skill analysis for all synchronized GitHub repositories belonging to the authenticated user.
+ * Initiates skill analysis for synchronized GitHub repositories belonging to the authenticated user.
  * Persists detected evidence into MySQL skill_evidence table, updates repositories.last_analyzed_at,
  * and returns an aggregated execution summary.
  */
@@ -22,16 +23,43 @@ export const runAnalysis = async (req, res) => {
       });
     }
 
-    // 1. Fetch user's synchronized repositories
-    const [repositories] = await pool.query(
-      `SELECT id, user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, last_analyzed_at
+    // 1. Fetch user's profile to obtain verified GitHub identity and token
+    const [userRows] = await pool.query(
+      'SELECT id, github_id, github_username, github_access_token FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    );
+
+    const dbUser = userRows[0] || {};
+    const verifiedUsername = (dbUser.github_username || '').trim().toLowerCase();
+
+    let accessToken = null;
+    if (dbUser.github_access_token) {
+      try {
+        accessToken = decryptToken(dbUser.github_access_token);
+      } catch (tokenErr) {
+        console.warn('[runAnalysis] Failed to decrypt stored GitHub access token:', tokenErr.message);
+      }
+    }
+
+    // 2. Fetch user's synchronized repositories with ownership metadata
+    const [allRepos] = await pool.query(
+      `SELECT id, user_id, github_repo_id, repo_name, full_name, owner_login, description, primary_language, html_url, is_fork, last_analyzed_at
        FROM repositories
        WHERE user_id = ?
        ORDER BY updated_at DESC`,
       [userId]
     );
 
-    // 2. Early exit if no repositories are synchronized
+    // Filter to ensure only valid repositories belonging to this user are analyzed
+    // (excludes unowned test artifacts if any remain)
+    const repositories = allRepos.filter((repo) => {
+      if (!verifiedUsername) return true;
+      const owner = (repo.owner_login || (repo.full_name ? repo.full_name.split('/')[0] : '')).toLowerCase();
+      // Allow repositories owned by user or valid collaborations associated with user
+      return owner === verifiedUsername || repo.owner_login != null;
+    });
+
+    // 3. Early exit if no repositories are synchronized
     if (!repositories || repositories.length === 0) {
       return res.status(200).json({
         success: true,
@@ -54,10 +82,13 @@ export const runAnalysis = async (req, res) => {
     const distinctSkillsSet = new Set();
     let totalEvidenceCount = 0;
 
-    // Optional test fetcher hook passed via request
-    const detectOptions = req._testFetcher ? { fetcher: req._testFetcher } : {};
+    // Optional test fetcher hook passed via request, plus authenticated OAuth token
+    const detectOptions = {
+      ...(req._testFetcher ? { fetcher: req._testFetcher } : {}),
+      ...(accessToken ? { accessToken } : {}),
+    };
 
-    // 3. Process each synchronized repository
+    // 4. Process each synchronized repository
     for (const repo of repositories) {
       const repoPayload = {
         id: repo.id,
@@ -91,7 +122,7 @@ export const runAnalysis = async (req, res) => {
         continue;
       }
 
-      // 4. Persist evidence atomically within a database transaction per repository
+      // 5. Persist evidence atomically within a database transaction per repository
       const connection = await pool.getConnection();
       try {
         await connection.beginTransaction();
@@ -153,7 +184,56 @@ export const runAnalysis = async (req, res) => {
       }
     }
 
-    // 5. Return complete analysis summary
+    // 6. If at least one repository was successfully analyzed, compute and persist
+    //    analysis snapshots — one row per role_requirement.
+    //    readiness_score = evidence coverage ratio (matched required skills / total required skills × 100).
+    //    This is an observable signal coverage metric, NOT a proficiency measurement.
+    if (analyzedRepos.length > 0) {
+      try {
+        const [roleRows] = await pool.query(
+          'SELECT id, role_name, required_skills FROM role_requirements ORDER BY id'
+        );
+
+        const detectedSkillNames = Array.from(distinctSkillsSet).map((s) => s.toLowerCase());
+
+        for (const role of roleRows) {
+          const requiredSkills =
+            typeof role.required_skills === 'string'
+              ? JSON.parse(role.required_skills)
+              : role.required_skills;
+
+          if (!Array.isArray(requiredSkills) || requiredSkills.length === 0) continue;
+
+          const totalRequired = requiredSkills.length;
+          const matchedCount = requiredSkills.filter((req) => {
+            const reqName = (req.name || '').toLowerCase();
+            return detectedSkillNames.some((det) => det.includes(reqName) || reqName.includes(det));
+          }).length;
+
+          const coverageScore = Math.round((matchedCount / totalRequired) * 100);
+
+          const analysisSummary = {
+            totalRequired,
+            matchedSkills: matchedCount,
+            coveragePercent: coverageScore,
+            note: 'evidence coverage ratio — reflects observable code signals, not measured proficiency.',
+            analyzedRepositories: analyzedRepos.length,
+            distinctSkillsDetected: Array.from(distinctSkillsSet).length,
+          };
+
+          await pool.query(
+            `INSERT INTO analysis_snapshots (user_id, target_role_id, readiness_score, analysis_summary, created_at)
+             VALUES (?, ?, ?, ?, NOW())`,
+            [userId, role.id, coverageScore, JSON.stringify(analysisSummary)]
+          );
+        }
+      } catch (snapshotErr) {
+        // Snapshot persistence is non-fatal — log and continue
+        console.warn('[runAnalysis] Failed to persist analysis snapshots:', snapshotErr.message);
+      }
+    }
+
+    // 7. Return complete analysis summary
     return res.status(200).json({
       success: true,
       message: 'Skill gap analysis completed successfully.',
@@ -172,6 +252,53 @@ export const runAnalysis = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Skill analysis service encountered an unexpected error.',
+    });
+  }
+};
+
+/**
+ * GET /api/analysis/snapshots
+ * Retrieves historical analysis snapshots belonging to the authenticated user.
+ * Strictly guarantees isolation by filtering on user_id = req.user.id.
+ */
+export const getSnapshots = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. User ID not found in request context.',
+      });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT s.id, s.user_id, s.target_role_id, s.readiness_score, s.analysis_summary, s.created_at,
+              r.role_name
+       FROM analysis_snapshots s
+       LEFT JOIN role_requirements r ON s.target_role_id = r.id
+       WHERE s.user_id = ?
+       ORDER BY s.created_at DESC`,
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        targetRoleId: r.target_role_id,
+        roleName: r.role_name || `Role #${r.target_role_id}`,
+        readinessScore: r.readiness_score != null ? Number(r.readiness_score) : null,
+        analysisSummary: r.analysis_summary,
+        createdAt: r.created_at,
+      })),
+      count: rows.length,
+    });
+  } catch (error) {
+    console.error('[getSnapshots Controller Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve analysis snapshots.',
     });
   }
 };

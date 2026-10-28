@@ -1,5 +1,6 @@
 /**
  * RepositoryCard — displays a GitHub repository summary card with interactive detail trigger
+ * and distinct ownership/collaboration and fork indicators.
  */
 const RepositoryCard = ({
   name = 'my-repository',
@@ -9,6 +10,9 @@ const RepositoryCard = ({
   stars = 0,
   forks = 0,
   updatedAt = 'Recently',
+  ownerLogin = null,
+  isOwner = true,
+  isFork = false,
   onViewDetails,
 }) => {
   const langColours = {
@@ -28,10 +32,26 @@ const RepositoryCard = ({
   return (
     <div className="repo-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-          <span className="repo-card__name" style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-semibold)' }}>
-            {name}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <span className="repo-card__name" style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-semibold)' }}>
+              {name}
+            </span>
+            {!isOwner && ownerLogin && (
+              <span
+                className="badge badge--amber"
+                style={{ fontSize: 'var(--text-xs)' }}
+                title={`Owned by @${ownerLogin}`}
+              >
+                Collab: @{ownerLogin}
+              </span>
+            )}
+            {isFork && (
+              <span className="badge badge--neutral" style={{ fontSize: 'var(--text-xs)' }}>
+                Fork
+              </span>
+            )}
+          </div>
           <span className="badge badge--neutral" style={{ textTransform: 'capitalize' }}>
             {visibility}
           </span>

@@ -176,6 +176,7 @@ export const fetchUserRepos = async (githubUsername, optionsOrToken = null) => {
         githubRepoId: repo.id,
         name: repo.name,
         fullName: repo.full_name,
+        ownerLogin: repo.owner?.login || (repo.full_name ? repo.full_name.split('/')[0] : cleanUsername),
         description: repo.description || null,
         primaryLanguage: repo.language || null,
         htmlUrl: repo.html_url,
@@ -197,6 +198,82 @@ export const fetchUserRepos = async (githubUsername, optionsOrToken = null) => {
   }
 
   return allRepositories;
+};
+
+/**
+ * Fetch repositories where the authenticated user is a collaborator (not owner).
+ * Requires an OAuth access token. Returns an empty array gracefully if token is absent,
+ * or if upstream GitHub responds with 404/403/non-200.
+ *
+ * @param {string} accessToken - GitHub OAuth access token
+ * @param {object} [_options={}] - Custom options ({ fetcher, timeoutMs, perPage, maxPages })
+ * @returns {Promise<Array<object>>} Array of normalized repository objects
+ */
+export const fetchUserCollaborations = async (accessToken, _options = {}) => {
+  if (!accessToken || typeof accessToken !== 'string') {
+    return [];
+  }
+
+  const customFetcher = _options.fetcher || globalThis.fetch;
+  const timeoutMs = _options.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const perPage = _options.perPage || DEFAULT_PER_PAGE;
+  const maxPages = _options.maxPages || 3;
+
+  const headers = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'Developer-Growth-Platform',
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  const collaborations = [];
+  let page = 1;
+  let hasNext = true;
+
+  try {
+    while (hasNext && page <= maxPages) {
+      const url = `https://api.github.com/user/repos?affiliation=collaborator&per_page=${perPage}&page=${page}&sort=updated`;
+      const response = await fetchWithTimeout(url, { method: 'GET', headers }, timeoutMs, customFetcher);
+
+      if (!response.ok) {
+        break;
+      }
+
+      const pageData = await response.json();
+      if (!Array.isArray(pageData) || pageData.length === 0) {
+        break;
+      }
+
+      for (const repo of pageData) {
+        collaborations.push({
+          githubRepoId: repo.id,
+          name: repo.name,
+          fullName: repo.full_name,
+          ownerLogin: repo.owner?.login || (repo.full_name ? repo.full_name.split('/')[0] : null),
+          description: repo.description || null,
+          primaryLanguage: repo.language || null,
+          htmlUrl: repo.html_url,
+          isPrivate: Boolean(repo.private),
+          isFork: Boolean(repo.fork),
+          stars: Number(repo.stargazers_count ?? 0),
+          forks: Number(repo.forks_count ?? 0),
+          defaultBranch: repo.default_branch || 'main',
+          updatedAt: repo.updated_at,
+          isCollaborator: true,
+        });
+      }
+
+      if (pageData.length < perPage) {
+        hasNext = false;
+      } else {
+        page++;
+      }
+    }
+  } catch (err) {
+    // Non-fatal: log warning and continue without collaborations
+    console.warn('[fetchUserCollaborations] Failed to retrieve collaboration repositories:', err.message);
+  }
+
+  return collaborations;
 };
 
 /**

@@ -157,9 +157,9 @@ const mergeEvidenceBySkill = (records) => {
  * @param {Function} fetcher    - Optional fetch override (for tests)
  * @returns {Promise<string[]>}
  */
-const fetchRootFilePaths = async (fullRepoName, fetcher) => {
+const fetchRootFilePaths = async (fullRepoName, fetcher, accessToken = null) => {
   try {
-    const token = process.env.GITHUB_TOKEN || null;
+    const token = accessToken || process.env.GITHUB_TOKEN || null;
     const [owner, repo] = fullRepoName.split('/');
 
     const headers = {
@@ -239,12 +239,13 @@ export const detectSkillsFromRepo = async (repository, _options = {}) => {
 
   const { fullName, id: repositoryId } = repository;
   const fetcher = _options.fetcher || null;
+  const accessToken = _options.accessToken || null;
 
   const allRawEvidence = [];
 
   // ── 1. Language analysis ─────────────────────────────────────────────────
   try {
-    const languageMap = await fetchRepoLanguages(fullName, null, fetcher ? { fetcher } : {});
+    const languageMap = await fetchRepoLanguages(fullName, accessToken, fetcher ? { fetcher } : {});
     if (languageMap) {
       const langEvidence = analyzeLanguages(languageMap);
       allRawEvidence.push(...langEvidence);
@@ -258,7 +259,7 @@ export const detectSkillsFromRepo = async (repository, _options = {}) => {
   // ── 2. Dependency manifests ──────────────────────────────────────────────
   for (const manifestPath of MANIFEST_PATHS) {
     try {
-      const content = await fetchFileContent(fullName, manifestPath, null, fetcher ? { fetcher } : {});
+      const content = await fetchFileContent(fullName, manifestPath, accessToken, fetcher ? { fetcher } : {});
       if (content !== null) {
         let depEvidence = [];
         if (manifestPath === 'package.json') {
@@ -277,7 +278,7 @@ export const detectSkillsFromRepo = async (repository, _options = {}) => {
 
   // ── 3. File evidence (root listing only) ─────────────────────────────────
   try {
-    const rootPaths = await fetchRootFilePaths(fullName, fetcher);
+    const rootPaths = await fetchRootFilePaths(fullName, fetcher, accessToken);
     if (rootPaths.length > 0) {
       const fileEvidence = analyzeFileEvidence(rootPaths);
       allRawEvidence.push(...fileEvidence);

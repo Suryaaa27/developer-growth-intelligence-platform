@@ -268,24 +268,24 @@ const runSkillPersistenceTests = async () => {
 
     // Seed Alice's synchronized repositories
     const [repoA1] = await pool.query(
-      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [aliceId, 8881, 'ecommerce-web', 'alice/ecommerce-web', 'Frontend and API', 'JavaScript', 'https://github.com/alice/ecommerce-web']
+      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, owner_login, is_fork)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [aliceId, 8881, 'ecommerce-web', 'alice/ecommerce-web', 'Frontend and API', 'JavaScript', 'https://github.com/alice/ecommerce-web', 'alice', 0]
     );
     aliceRepo1Id = repoA1.insertId;
 
     const [repoA2] = await pool.query(
-      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [aliceId, 8882, 'backend-service', 'alice/backend-service', 'Core backend', 'Java', 'https://github.com/alice/backend-service']
+      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, owner_login, is_fork)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [aliceId, 8882, 'backend-service', 'alice/backend-service', 'Core backend', 'Java', 'https://github.com/alice/backend-service', 'alice', 0]
     );
     aliceRepo2Id = repoA2.insertId;
 
     // Seed Bob's synchronized repository
     const [repoB1] = await pool.query(
-      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [bobId, 8883, 'data-pipeline', 'bob/data-pipeline', 'Python data pipeline', 'Python', 'https://github.com/bob/data-pipeline']
+      `INSERT INTO repositories (user_id, github_repo_id, repo_name, full_name, description, primary_language, html_url, owner_login, is_fork)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [bobId, 8883, 'data-pipeline', 'bob/data-pipeline', 'Python data pipeline', 'Python', 'https://github.com/bob/data-pipeline', 'bob', 0]
     );
     bobRepo1Id = repoB1.insertId;
 
@@ -300,6 +300,9 @@ const runSkillPersistenceTests = async () => {
 
     const unauthSkills = await request('/api/skills');
     assert(unauthSkills.status === 401, 'GET /api/skills without token returns 401');
+
+    const unauthSnapshots = await request('/api/analysis/snapshots');
+    assert(unauthSnapshots.status === 401, 'GET /api/analysis/snapshots without token returns 401');
 
     const unauthSkillEvidence = await request('/api/skills/JavaScript');
     assert(unauthSkillEvidence.status === 401, 'GET /api/skills/:skillName without token returns 401');
@@ -424,10 +427,33 @@ const runSkillPersistenceTests = async () => {
     assert(jsSkill.evidenceType === 'language_bytes', 'JavaScript primary evidenceType is language_bytes');
     assert(jsSkill.repositoryCount >= 1, 'JavaScript repositoryCount >= 1');
     assert(Array.isArray(jsSkill.contributingRepositories), 'contributingRepositories is an array');
+    assert(jsSkill.isOwner === true, 'JavaScript has isOwner: true for owned repository');
+    assert(jsSkill.ownedRepositoryCount >= 1, 'JavaScript has ownedRepositoryCount >= 1');
+    assert(Array.isArray(jsSkill.ownedRepositories), 'ownedRepositories is an array');
     assert(!!jsSkill.lastDetectedAt, 'lastDetectedAt timestamp is present');
 
     const reactSkill = skillsList.find((s) => s.skillName === 'React');
     assert(!!reactSkill, 'React skill present in aggregated list');
+
+    // Verify GET /api/analysis/snapshots returns populated data after a run
+    const aliceSnapshotsRes = await request('/api/analysis/snapshots', {
+      headers: { Authorization: `Bearer ${aliceToken}` },
+    });
+    assert(aliceSnapshotsRes.status === 200, 'GET /api/analysis/snapshots returns 200 OK');
+    assert(Array.isArray(aliceSnapshotsRes.data?.data), 'Snapshots returned as array');
+    assert(aliceSnapshotsRes.data?.data?.length >= 1, 'Alice has at least 1 snapshot after analysis run');
+    const firstSnap = aliceSnapshotsRes.data?.data[0];
+    assert(firstSnap?.userId === aliceId, 'Snapshot userId matches Alice');
+    assert(typeof firstSnap?.roleName === 'string' && firstSnap.roleName.length > 0, 'Snapshot contains role name string');
+    assert(firstSnap?.readinessScore !== undefined, 'Snapshot contains readinessScore');
+    assert(typeof firstSnap?.analysisSummary === 'object', 'Snapshot analysisSummary is an object');
+    assert((firstSnap?.analysisSummary?.matchedSkills ?? -1) >= 0, 'analysisSummary has matchedSkills');
+    assert(firstSnap?.analysisSummary?.totalRequired > 0, 'analysisSummary has totalRequired');
+    assert(
+      firstSnap?.analysisSummary?.note?.includes('evidence coverage'),
+      'analysisSummary note is honest about coverage metric'
+    );
+
     assert(reactSkill.category === 'Framework', 'React category is Framework');
 
     const dockerSkill = skillsList.find((s) => s.skillName === 'Docker');
@@ -512,6 +538,16 @@ const runSkillPersistenceTests = async () => {
       headers: { Authorization: `Bearer ${aliceToken}` },
     });
     assert(alicePythonEvidence.status === 404, 'Alice requesting Bob Python evidence returns 404 (strictly isolated)');
+
+    // Check snapshots user isolation
+    const bobSnapshotsRes = await request('/api/analysis/snapshots', {
+      headers: { Authorization: `Bearer ${bobToken}` },
+    });
+    assert(bobSnapshotsRes.status === 200, 'Bob GET /api/analysis/snapshots returns 200 OK');
+    assert(
+      bobSnapshotsRes.data?.data?.every((s) => s.userId === bobId),
+      'Bob snapshots strictly contain only Bob snapshots (no Alice snapshots)'
+    );
 
     // ─────────────────────────────────────────────────────────────
     // 9. Upstream Rate Limit Handling (429)
