@@ -2,6 +2,10 @@ import 'dotenv/config';
 import pool from '../src/config/db.js';
 import { runMigration as runOwnershipMigration } from './migrations/002_add_repo_ownership.js';
 import { runMigration as runRoleSeedMigration } from './migrations/003_seed_role_requirements.js';
+import { runMigration as runExpandRoleCatalogMigration } from './migrations/004_expand_role_catalog.js';
+import { runMigration as runTargetRoleAndCategoriesMigration } from './migrations/005_add_target_role_and_categories.js';
+import { runMigration as runRoadmapProgressMigration } from './migrations/006_create_roadmap_progress.js';
+import { runMigration as runDropLegacyTablesMigration } from './migrations/007_drop_legacy_tables.js';
 
 /**
  * Migration Script
@@ -33,6 +37,18 @@ const migrate = async () => {
 
     // Migration 003: Seed default role requirement templates (idempotent INSERT IGNORE)
     await runRoleSeedMigration();
+
+    // Migration 004: Expand role catalog to ~30 engineering roles across 7 disciplines (idempotent INSERT IGNORE)
+    await runExpandRoleCatalogMigration();
+
+    // Migration 005: Add target_role/target_role_id to users and category to role_requirements
+    await runTargetRoleAndCategoriesMigration();
+
+    // Migration 006: Create user_roadmap_progress table for resilient progress persistence
+    await runRoadmapProgressMigration();
+
+    // Migration 007: Drop legacy empty tables user_progress and recommendations
+    await runDropLegacyTablesMigration();
 
     process.exit(0);
   } catch (error) {

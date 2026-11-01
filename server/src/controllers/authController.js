@@ -72,19 +72,47 @@ export const register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(trimmedPassword, salt);
 
-    // 6. Insert new user into MySQL with role 'USER' explicitly enforced
+    // 6. Validate target role against role_requirements
+    let targetRoleName = 'Java Backend Developer';
+    let targetRoleId = null;
+
+    const rawTargetRole = req.body.targetRole || req.body.targetRoleId;
+    if (rawTargetRole) {
+      const [roleCheck] = await pool.query(
+        'SELECT id, role_name FROM role_requirements WHERE role_name = ? OR id = ? LIMIT 1',
+        [String(rawTargetRole).trim(), Number(rawTargetRole) || 0]
+      );
+      if (roleCheck.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected target engineering role is invalid. Please select a valid role from the catalog.',
+        });
+      }
+      targetRoleName = roleCheck[0].role_name;
+      targetRoleId = roleCheck[0].id;
+    } else {
+      const [defaultRole] = await pool.query(
+        "SELECT id, role_name FROM role_requirements WHERE role_name = 'Java Backend Developer' LIMIT 1"
+      );
+      if (defaultRole.length > 0) {
+        targetRoleName = defaultRole[0].role_name;
+        targetRoleId = defaultRole[0].id;
+      }
+    }
+
+    // 7. Insert new user into MySQL with role 'USER' explicitly enforced
     const [result] = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role, is_active)
-       VALUES (?, ?, ?, 'USER', TRUE)`,
-      [trimmedName, trimmedEmail, passwordHash]
+      `INSERT INTO users (name, email, password_hash, role, target_role, target_role_id, is_active)
+       VALUES (?, ?, ?, 'USER', ?, ?, TRUE)`,
+      [trimmedName, trimmedEmail, passwordHash, targetRoleName, targetRoleId]
     );
 
     const newUserId = result.insertId;
 
-    // 7. Generate JWT
+    // 8. Generate JWT
     const token = generateToken(newUserId, 'USER');
 
-    // 8. Return response (never return password_hash)
+    // 9. Return response (never return password_hash)
     return res.status(201).json({
       success: true,
       message: 'Account registered successfully.',
@@ -94,6 +122,8 @@ export const register = async (req, res) => {
           name: trimmedName,
           email: trimmedEmail,
           role: 'USER',
+          targetRole: targetRoleName,
+          targetRoleId: targetRoleId,
         },
         token,
       },
@@ -127,7 +157,7 @@ export const login = async (req, res) => {
 
     // 1. Fetch user by email
     const [rows] = await pool.query(
-      'SELECT id, name, email, password_hash, role, is_active, github_id, github_username FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, name, email, password_hash, role, target_role, target_role_id, is_active, github_id, github_username FROM users WHERE email = ? LIMIT 1',
       [trimmedEmail]
     );
 
@@ -171,6 +201,8 @@ export const login = async (req, res) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          targetRole: user.target_role || null,
+          targetRoleId: user.target_role_id || null,
           githubId: user.github_id ? Number(user.github_id) : null,
           githubUsername: user.github_username || null,
         },
@@ -201,6 +233,8 @@ export const getMe = async (req, res) => {
           name: req.user.name,
           email: req.user.email,
           role: req.user.role,
+          targetRole: req.user.targetRole || null,
+          targetRoleId: req.user.targetRoleId || null,
           githubId: req.user.githubId || null,
           githubUsername: req.user.githubUsername || null,
         },

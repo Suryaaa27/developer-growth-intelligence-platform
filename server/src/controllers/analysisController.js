@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 import { detectSkillsFromRepo } from '../services/skillDetectionService.js';
 import { decryptToken } from '../utils/tokenEncryption.js';
+import { evaluateRoleCoverage } from '../utils/skillMatcher.js';
 
 /**
  * Analysis Controller
@@ -194,7 +195,7 @@ export const runAnalysis = async (req, res) => {
           'SELECT id, role_name, required_skills FROM role_requirements ORDER BY id'
         );
 
-        const detectedSkillNames = Array.from(distinctSkillsSet).map((s) => s.toLowerCase());
+        const detectedSkillNames = Array.from(distinctSkillsSet);
 
         for (const role of roleRows) {
           const requiredSkills =
@@ -204,27 +205,23 @@ export const runAnalysis = async (req, res) => {
 
           if (!Array.isArray(requiredSkills) || requiredSkills.length === 0) continue;
 
-          const totalRequired = requiredSkills.length;
-          const matchedCount = requiredSkills.filter((req) => {
-            const reqName = (req.name || '').toLowerCase();
-            return detectedSkillNames.some((det) => det.includes(reqName) || reqName.includes(det));
-          }).length;
-
-          const coverageScore = Math.round((matchedCount / totalRequired) * 100);
+          const evaluation = evaluateRoleCoverage(requiredSkills, detectedSkillNames);
 
           const analysisSummary = {
-            totalRequired,
-            matchedSkills: matchedCount,
-            coveragePercent: coverageScore,
+            totalRequired: evaluation.totalRequired,
+            matchedSkills: evaluation.matchedCount,
+            coveragePercent: evaluation.coverageScore,
+            matchedSkillList: evaluation.matchedSkills,
+            missingSkillList: evaluation.missingSkills,
             note: 'evidence coverage ratio — reflects observable code signals, not measured proficiency.',
             analyzedRepositories: analyzedRepos.length,
-            distinctSkillsDetected: Array.from(distinctSkillsSet).length,
+            distinctSkillsDetected: detectedSkillNames.length,
           };
 
           await pool.query(
             `INSERT INTO analysis_snapshots (user_id, target_role_id, readiness_score, analysis_summary, created_at)
              VALUES (?, ?, ?, ?, NOW())`,
-            [userId, role.id, coverageScore, JSON.stringify(analysisSummary)]
+            [userId, role.id, evaluation.coverageScore, JSON.stringify(analysisSummary)]
           );
         }
       } catch (snapshotErr) {
@@ -271,15 +268,28 @@ export const getSnapshots = async (req, res) => {
       });
     }
 
-    const [rows] = await pool.query(
-      `SELECT s.id, s.user_id, s.target_role_id, s.readiness_score, s.analysis_summary, s.created_at,
+    const { targetRoleId, targetRole, role } = req.query;
+
+    let query = `
+      SELECT s.id, s.user_id, s.target_role_id, s.readiness_score, s.analysis_summary, s.created_at,
               r.role_name
        FROM analysis_snapshots s
        LEFT JOIN role_requirements r ON s.target_role_id = r.id
        WHERE s.user_id = ?
-       ORDER BY s.created_at DESC`,
-      [userId]
-    );
+    `;
+    const params = [userId];
+
+    if (targetRoleId) {
+      query += ' AND s.target_role_id = ?';
+      params.push(Number(targetRoleId));
+    } else if (targetRole || role) {
+      query += ' AND (r.role_name = ? OR s.target_role_id = ?)';
+      params.push(String(targetRole || role).trim(), Number(targetRole || role) || 0);
+    }
+
+    query += ' ORDER BY s.created_at DESC';
+
+    const [rows] = await pool.query(query, params);
 
     return res.status(200).json({
       success: true,

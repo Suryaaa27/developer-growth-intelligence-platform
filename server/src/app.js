@@ -7,6 +7,9 @@ import adminRoutes from './routes/adminRoutes.js';
 import githubRoutes from './routes/githubRoutes.js';
 import analysisRoutes from './routes/analysisRoutes.js';
 import skillRoutes from './routes/skillRoutes.js';
+import roleRoutes from './routes/roleRoutes.js';
+import roadmapRoutes from './routes/roadmapRoutes.js';
+import recommendationRoutes from './routes/recommendationRoutes.js';
 
 const app = express();
 
@@ -73,6 +76,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/skills', skillRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/roadmap', roadmapRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 
 // ── 6. 404 Handler for Unknown Routes ──────────────────────────
 app.use((req, res, next) => {

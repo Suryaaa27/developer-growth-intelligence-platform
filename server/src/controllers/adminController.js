@@ -576,6 +576,7 @@ export const updateJobRole = async (req, res) => {
  * Deletes a target job role if not referenced by analysis snapshots.
  */
 export const deleteJobRole = async (req, res) => {
+  let connection;
   try {
     const roleId = Number(req.params.id);
     if (!roleId || isNaN(roleId)) {
@@ -587,6 +588,8 @@ export const deleteJobRole = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Job role not found.' });
     }
 
+    const roleName = check[0].role_name;
+
     // Check if any analysis snapshots reference this role (Foreign Key RESTRICT protection)
     const [[{ snapshotRef }]] = await pool.query(
       'SELECT COUNT(*) AS snapshotRef FROM analysis_snapshots WHERE target_role_id = ?',
@@ -596,20 +599,49 @@ export const deleteJobRole = async (req, res) => {
     if (snapshotRef > 0) {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete job role '${check[0].role_name}' because ${snapshotRef} analysis snapshot(s) reference it.`,
+        message: `Cannot delete job role '${roleName}' because ${snapshotRef} analysis snapshot(s) reference it.`,
       });
     }
 
-    await pool.query('DELETE FROM role_requirements WHERE id = ?', [roleId]);
+    // Execute user target_role references clearing and role deletion inside a single transaction
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    // Clear target role references from affected users: set target_role_id and target_role to NULL
+    const [userUpdate] = await connection.query(
+      'UPDATE users SET target_role_id = NULL, target_role = NULL WHERE target_role_id = ? OR target_role = ?',
+      [roleId, roleName]
+    );
+
+    // Delete the role requirement entry
+    await connection.query('DELETE FROM role_requirements WHERE id = ?', [roleId]);
+
+    // Commit both operations atomically
+    await connection.commit();
 
     return res.status(200).json({
       success: true,
-      message: `Job role '${check[0].role_name}' deleted successfully.`,
-      data: { id: roleId },
+      message: `Job role '${roleName}' deleted successfully.`,
+      data: {
+        id: roleId,
+        roleName,
+        affectedUsersCount: userUpdate.affectedRows,
+      },
     });
   } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rbErr) {
+        console.error('[Admin deleteJobRole Rollback Error]:', rbErr.message);
+      }
+    }
     console.error('[Admin deleteJobRole Error]:', error.message);
     return res.status(500).json({ success: false, message: 'Failed to delete job role.' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 

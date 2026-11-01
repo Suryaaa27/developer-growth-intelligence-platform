@@ -254,6 +254,10 @@ const runGithubOAuthTests = async () => {
       authUrl.searchParams.get('scope') === 'read:user',
       'OAuth scope is strictly "read:user" (no repo or private scope requested)'
     );
+    assert(
+      authUrl.searchParams.get('prompt') === 'consent',
+      'OAuth authorization URL specifies prompt=consent to ensure consent confirmation and display active account'
+    );
 
     const stateToken = authUrl.searchParams.get('state');
     assert(Boolean(stateToken), 'OAuth authorization URL contains a state token');
@@ -421,6 +425,65 @@ const runGithubOAuthTests = async () => {
     });
     assert(verifiedSync.status === 200, 'POST /api/github/sync for verified linked username returns 200 OK');
     assert(verifiedSync.data?.data?.syncedCount === 1, 'Synced count is 1 for verified repository');
+
+    // ─────────────────────────────────────────────────────────────
+    // 8. Disconnect & Reconnect Flow (Safe Unlinking & Multi-User Isolation)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[8/8] Testing Disconnect, Reconnect & Multi-User Isolation...');
+
+    // Unauthenticated disconnect attempt
+    const unauthDisconnect = await request('/api/auth/github/disconnect', {
+      method: 'POST',
+    });
+    assert(unauthDisconnect.status === 401, 'Unauthenticated POST /api/auth/github/disconnect returns 401 Unauthorized');
+
+    // User 1 disconnects their GitHub account
+    const disconnectRes = await request('/api/auth/github/disconnect', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${user1Token}` },
+    });
+    assert(disconnectRes.status === 200, 'POST /api/auth/github/disconnect returns 200 OK');
+    assert(disconnectRes.data?.data?.githubUsername === null, 'Disconnect response returns githubUsername = null');
+
+    // Verify User 1's record in MySQL
+    const [user1AfterDisconnect] = await pool.query(
+      'SELECT id, github_id, github_username, github_access_token FROM users WHERE id = ?',
+      [user1Id]
+    );
+    assert(user1AfterDisconnect[0].github_id === null, 'User 1 github_id is cleared to null');
+    assert(user1AfterDisconnect[0].github_username === null, 'User 1 github_username is cleared to null');
+    assert(user1AfterDisconnect[0].github_access_token === null, 'User 1 github_access_token is cleared to null');
+
+    // Verify GET /api/auth/me reflects disconnected status
+    const meAfterDisconnect = await request('/api/auth/me', {
+      headers: { Authorization: `Bearer ${user1Token}` },
+    });
+    assert(meAfterDisconnect.data?.data?.user?.githubUsername === null, 'GET /api/auth/me reflects disconnected GitHub account');
+
+    // Now User 2 can link 'verified-octocat' without conflict
+    const user2FreshState = generateOAuthState(user2Id);
+    const user2SuccessCallback = await request(
+      `/api/auth/github/callback?code=code_for_user2&state=${encodeURIComponent(user2FreshState)}`,
+      { redirect: 'manual' }
+    );
+    assert(user2SuccessCallback.status === 302, 'User 2 callback succeeds now that User 1 disconnected');
+    assert(
+      user2SuccessCallback.location?.includes('/repositories?github=linked'),
+      'User 2 redirected with github=linked'
+    );
+
+    const [user2LinkedRows] = await pool.query(
+      'SELECT id, github_id, github_username FROM users WHERE id = ?',
+      [user2Id]
+    );
+    assert(user2LinkedRows[0].github_username === 'verified-octocat', 'User 2 now securely owns verified-octocat link');
+
+    // User 1 disconnect call via /api/github/disconnect route alias
+    const aliasDisconnect = await request('/api/github/disconnect', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${user2Token}` },
+    });
+    assert(aliasDisconnect.status === 200, 'POST /api/github/disconnect route alias returns 200 OK');
 
   } catch (err) {
     console.error('Unhandled exception during test execution:', err);

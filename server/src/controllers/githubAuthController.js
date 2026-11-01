@@ -44,6 +44,7 @@ export const initiateGitHubOAuth = async (req, res) => {
     githubAuthUrl.searchParams.set('redirect_uri', callbackUrl);
     githubAuthUrl.searchParams.set('scope', scope);
     githubAuthUrl.searchParams.set('state', state);
+    githubAuthUrl.searchParams.set('prompt', 'consent');
 
     // If client explicitly requested JSON (API fetch)
     if (req.query.format === 'json' || req.headers.accept?.includes('application/json')) {
@@ -184,18 +185,15 @@ export const handleGitHubCallback = async (req, res) => {
     }
 
     // 7. Enforce Unique GitHub Identity Constraint (Graceful Conflict Handling)
-    // Check if this GitHub ID is already linked to another DevGrowth user account
+    // Check if this GitHub ID or GitHub username is already linked to another DevGrowth user account
     const [conflictRows] = await pool.query(
-      'SELECT id FROM users WHERE github_id = ? LIMIT 1',
-      [githubId]
+      'SELECT id, name, github_username FROM users WHERE (github_id = ? OR LOWER(github_username) = LOWER(?)) AND id != ? LIMIT 1',
+      [githubId, githubUsername, userId]
     );
 
     if (conflictRows && conflictRows.length > 0) {
-      const existingLinkedUserId = conflictRows[0].id;
-      if (Number(existingLinkedUserId) !== Number(userId)) {
-        // Account is already linked to a different DevGrowth user
-        return res.redirect(`${targetRedirectBase}?github_error=account_already_linked`);
-      }
+      console.warn(`[GitHub Callback Conflict]: GitHub account @${githubUsername} (ID ${githubId}) is already linked to DevGrowth user #${conflictRows[0].id}.`);
+      return res.redirect(`${targetRedirectBase}?github_error=account_already_linked`);
     }
 
     // 8. Encrypt and save the access token alongside verified github_id / github_username.
@@ -220,5 +218,63 @@ export const handleGitHubCallback = async (req, res) => {
     console.error('[handleGitHubCallback Error]:', error.message);
     // Never expose stack traces or raw errors in redirection
     return res.redirect(`${targetRedirectBase}?github_error=server_error`);
+  }
+};
+
+/**
+ * POST /api/auth/github/disconnect
+ * Disconnects the GitHub account linked to the currently authenticated user.
+ * Protected by authenticate middleware.
+ *
+ * Guarantees:
+ * 1. Only modifies the authenticated user's record (user_id = req.user.id).
+ * 2. Clears github_id, github_username, and github_access_token.
+ * 3. Never deletes another user's token or account.
+ * 4. Preserves skill_evidence and analysis_snapshots.
+ * 5. Returns updated user status so frontend reflects disconnected state immediately.
+ */
+export const disconnectGitHub = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check current link status
+    const [rows] = await pool.query(
+      'SELECT id, github_id, github_username FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+    }
+
+    const previousUsername = rows[0].github_username;
+
+    // Safely clear only this user's GitHub identity & encrypted access token.
+    // Preserves skill_evidence, analysis_snapshots, and user account.
+    await pool.query(
+      'UPDATE users SET github_id = NULL, github_username = NULL, github_access_token = NULL WHERE id = ?',
+      [userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: previousUsername
+        ? `Successfully disconnected GitHub account @${previousUsername}.`
+        : 'GitHub account disconnected successfully.',
+      data: {
+        userId,
+        githubId: null,
+        githubUsername: null,
+      },
+    });
+  } catch (error) {
+    console.error('[disconnectGitHub Error]:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to disconnect GitHub account.',
+    });
   }
 };
