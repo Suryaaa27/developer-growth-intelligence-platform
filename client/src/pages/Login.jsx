@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import Logo from '../components/Logo';
+import AuthScene from '../components/auth/AuthScene';
 import { authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -107,39 +109,37 @@ const Login = () => {
   };
 
   return (
-    <div className="app-shell">
+    <div className="auth-page">
+      <AuthScene
+        headline="Grow from what you have built."
+        subline="We turn your repositories into a skill roadmap."
+      />
       <Navbar />
-      <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 72px)', padding: 'var(--space-6)' }}>
-        <div className="card" style={{ width: '100%', maxWidth: '440px', padding: 'var(--space-8)' }}>
-          <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-            <h1 className="page-header__title" style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-2)' }}>
-              Sign In to DevGrowth
-            </h1>
-            <p className="page-header__subtitle" style={{ margin: 0 }}>
-              Access your developer skill growth metrics and portfolio intelligence.
-            </p>
+      <main className="auth-center">
+        <div className="auth-header-block">
+          <h1 className="auth-headline">Grow from what you have built.</h1>
+          <p className="auth-subline">We turn your repositories into a skill roadmap.</p>
+        </div>
+
+        <div className="auth-card">
+          <div className="auth-card__head">
+            <Logo variant="mark" size={48} animated className="auth-logo" />
+            <h2 className="auth-card__title">Sign in to DevGrowth</h2>
+            <p className="auth-card__subtitle">Enter your credentials to access your account</p>
           </div>
 
           {submittedMessage && (
-            <div
-              className="card card--compact mb-6"
-              style={{
-                backgroundColor: 'var(--color-accent-light)',
-                border: '1px solid var(--color-accent-border)',
-                color: 'var(--color-accent)',
-                fontSize: 'var(--text-sm)',
-              }}
-            >
+            <div className="auth-flash auth-flash--success">
               {submittedMessage}
             </div>
           )}
           {apiError && (
-            <div className="card card--compact mb-6" style={{ backgroundColor: 'var(--color-danger-light)', border: '1px solid var(--color-danger-border)', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+            <div className="auth-flash auth-flash--error">
               {apiError}
             </div>
           )}
           {loading && (
-            <div className="card card--compact mb-6" style={{ backgroundColor: 'var(--color-accent-light)', border: '1px solid var(--color-accent-border)', color: 'var(--color-accent-fg)', fontSize: 'var(--text-sm)' }}>
+            <div className="auth-flash auth-flash--info">
               Logging in... Please wait.
             </div>
           )}
@@ -147,7 +147,7 @@ const Login = () => {
           <form onSubmit={handleSubmit} noValidate>
             <div className="form-group">
               <label htmlFor="login-email" className="form-label">
-                Email Address
+                Email address
               </label>
               <input
                 id="login-email"
@@ -161,11 +161,15 @@ const Login = () => {
             </div>
 
             <div className="form-group">
-              <div className="flex items-center justify-between" style={{ marginBottom: '2px' }}>
-                <label htmlFor="login-password" className="form-label">
+              <div className="flex items-center justify-between" style={{ marginBottom: '4px' }}>
+                <label htmlFor="login-password" className="form-label" style={{ marginBottom: 0 }}>
                   Password
                 </label>
-                <a href="#forgot" onClick={(e) => e.preventDefault()} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent)' }}>
+                <a
+                  href="#forgot"
+                  onClick={(e) => e.preventDefault()}
+                  style={{ fontSize: 'var(--text-xs)', color: 'var(--color-link)' }}
+                >
                   Forgot password?
                 </a>
               </div>
@@ -190,18 +194,23 @@ const Login = () => {
               {errors.password && <span className="form-error">{errors.password}</span>}
             </div>
 
-            <button type="submit" className="btn btn--primary w-full" style={{ width: '100%', marginTop: 'var(--space-3)' }}>
-              Sign In
+            <button
+              type="submit"
+              className="btn btn--primary w-full auth-submit"
+              disabled={loading}
+            >
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
 
-          <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
+          <div className="auth-card__divider" />
 
-          <p style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-            Don't have an account yet?{' '}
-            <Link to="/register" style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--color-accent)' }}>
+          <p className="auth-card__footer">
+            New to DevGrowth?{' '}
+            <Link to="/register" className="auth-link auth-link--strong">
               Create an account
             </Link>
+            .
           </p>
         </div>
       </main>

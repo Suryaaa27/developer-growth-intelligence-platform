@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { SidebarProvider } from './context/SidebarContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Developer Portal Pages
@@ -28,7 +29,8 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
+        <SidebarProvider>
+          <Router>
           <Routes>
             {/* Public Authentication Routes */}
             <Route path="/login" element={<Login />} />
@@ -142,8 +144,9 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
-      </AuthProvider>
-    </ThemeProvider>
+      </SidebarProvider>
+    </AuthProvider>
+  </ThemeProvider>
   );
 }
 

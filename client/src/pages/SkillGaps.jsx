@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
+import { InfoIcon } from '../components/icons';
 import { skillsAPI, analysisAPI, rolesAPI, userAPI, recommendationsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -497,26 +498,24 @@ const SkillGaps = () => {
     <AppLayout>
       {/* Page Header */}
       <div className="page-header">
-        <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-          <div>
-            <h1 className="page-header__title">Skill Gaps Analysis</h1>
-            <p className="page-header__subtitle">
-              Benchmark observable repository evidence against standard industry career track competencies.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleRunAnalysis}
-              disabled={isAnalyzing || loading}
-              className="btn btn--primary btn--sm"
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Run Skill Analysis'}
-            </button>
-            <Link to="/skills" className="btn btn--secondary btn--sm">
-              Full Evidence →
-            </Link>
-          </div>
+        <div className="page-header__content">
+          <h1 className="page-header__title">Skill Gaps Analysis</h1>
+          <p className="page-header__subtitle">
+            Benchmark observable repository evidence against standard industry career track competencies.
+          </p>
+        </div>
+        <div className="page-header__actions">
+          <button
+            type="button"
+            onClick={handleRunAnalysis}
+            disabled={isAnalyzing || loading}
+            className="btn btn--primary btn--sm"
+          >
+            {isAnalyzing ? 'Analyzing...' : 'Run Skill Analysis'}
+          </button>
+          <Link to="/skills" className="btn btn--secondary btn--sm">
+            Full Evidence →
+          </Link>
         </div>
       </div>
 
@@ -533,7 +532,7 @@ const SkillGaps = () => {
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: 'var(--text-sm)' }}>{analysisAlert.message}</span>
+          <span style={{ fontSize: '15px' }}>{analysisAlert.message}</span>
           <button
             type="button"
             onClick={() => setAnalysisAlert(null)}
@@ -546,38 +545,34 @@ const SkillGaps = () => {
       )}
 
       {/* Data Transparency Banner */}
-      <div
-        className="card mb-6"
-        style={{
-          borderLeft: '4px solid var(--color-accent)',
-          backgroundColor: 'var(--color-surface)',
-          padding: 'var(--space-5) var(--space-6)',
-        }}
-      >
-        <div className="flex items-center gap-2" style={{ marginBottom: 'var(--space-1)' }}>
-          <span className="badge badge--blue" style={{ textTransform: 'uppercase' }}>Evidence Transparency</span>
-          <span style={{ fontWeight: 'var(--fw-semibold)', fontSize: 'var(--text-md)', color: 'var(--color-text-primary)' }}>
-            About Role Readiness & Gaps
-          </span>
+      <div className="callout-banner callout-banner--info mb-6">
+        <div className="callout-banner__left">
+          <div className="callout-banner__title-row">
+            <InfoIcon size={16} style={{ color: 'var(--color-link)' }} />
+            <span className="badge badge--blue" style={{ textTransform: 'uppercase' }}>Evidence Transparency</span>
+            <span className="callout-banner__title">
+              About Role Readiness & Gaps
+            </span>
+          </div>
+          <p className="callout-banner__desc" style={{ maxWidth: '100ch' }}>
+            Automated algorithmic role-readiness scores are currently in development. Rather than fabricating
+            arbitrary percentage ratings, DevGrowth benchmarks your <strong>actual verified GitHub repository evidence</strong> against
+            standard technical requirements. A <em>Missing Signal</em> indicates no artifact was found in your scanned repositories — not
+            a lack of developer ability.
+          </p>
         </div>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.6 }}>
-          Automated algorithmic role-readiness scores are currently in development. Rather than fabricating
-          arbitrary percentage ratings, DevGrowth benchmarks your <strong>actual verified GitHub repository evidence</strong> against
-          standard technical requirements. A <em>Missing Signal</em> indicates no artifact was found in your scanned repositories — not
-          a lack of developer ability.
-        </p>
       </div>
 
       {/* Role Selector Controls */}
-      <div className="card mb-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ flex: 1, minWidth: '280px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-            <label htmlFor="role-select" className="form-label" style={{ margin: 0, fontWeight: 'var(--fw-semibold)' }}>
+      <div className="card track-benchmark-card mb-6">
+        <div className="track-benchmark-card__left">
+          <div className="track-benchmark-card__top-row">
+            <label htmlFor="role-select" className="form-label" style={{ margin: 0 }}>
               Benchmark Engineering Career Track:
             </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {isCurrentTargetRole ? (
-                <span className="badge badge--green" style={{ fontSize: 'var(--text-xs)' }}>
+                <span className="badge badge--green">
                   ✓ My Target Role
                 </span>
               ) : (
@@ -586,7 +581,6 @@ const SkillGaps = () => {
                   onClick={handleSetTargetRole}
                   disabled={updatingRole || !user}
                   className="btn btn--secondary btn--sm"
-                  style={{ padding: '2px 8px', fontSize: 'var(--text-xs)' }}
                   title="Save this role as your profile target role"
                 >
                   {updatingRole ? 'Updating...' : 'Set as My Target Role'}
@@ -594,7 +588,7 @@ const SkillGaps = () => {
               )}
               <Link
                 to="/profile"
-                style={{ fontSize: 'var(--text-xs)', color: 'var(--color-link)', textDecoration: 'none', marginLeft: 'var(--space-1)' }}
+                style={{ fontSize: '13px', color: 'var(--color-link)', textDecoration: 'none' }}
                 title="Manage persistent career target in Profile"
               >
                 Profile Settings →
@@ -607,7 +601,7 @@ const SkillGaps = () => {
             className="form-select"
             value={selectedRoleKey}
             onChange={(e) => setSelectedRoleKey(e.target.value)}
-            style={{ fontWeight: 'var(--fw-semibold)' }}
+            style={{ fontWeight: 600 }}
           >
             {groupedRoles.length > 0 ? (
               groupedRoles.map(([category, items]) => (
@@ -637,11 +631,11 @@ const SkillGaps = () => {
           {roleUpdateMsg && (
             <p
               style={{
-                marginTop: 'var(--space-2)',
+                marginTop: '8px',
                 marginBottom: 0,
-                fontSize: 'var(--text-xs)',
+                fontSize: '13px',
                 color: roleUpdateMsg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger, #f85149)',
-                fontWeight: 'var(--fw-medium)',
+                fontWeight: 500,
               }}
             >
               {roleUpdateMsg.text}
@@ -649,18 +643,16 @@ const SkillGaps = () => {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', marginBottom: '2px', fontWeight: 'var(--fw-bold)' }}>
-              Demonstrated Signals
-            </p>
-            <p style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--fw-bold)', color: 'var(--color-accent)', margin: 0 }}>
-              {loading ? '–' : `${matchedCount} / ${competencyComparisons.length}`}
-            </p>
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', margin: '2px 0 0' }}>
-              Competencies with Observable Evidence
-            </p>
-          </div>
+        <div className="track-benchmark-card__right-panel">
+          <p className="track-benchmark-card__signals-label">
+            Demonstrated Signals
+          </p>
+          <p className="track-benchmark-card__signals-value">
+            {loading ? '–' : `${matchedCount} / ${competencyComparisons.length}`}
+          </p>
+          <p className="track-benchmark-card__signals-caption">
+            Competencies with Observable Evidence
+          </p>
         </div>
       </div>
 
@@ -703,18 +695,20 @@ const SkillGaps = () => {
 
       {/* Empty State when no skills detected */}
       {!loading && !loadError && skills.length === 0 && (
-        <div className="card empty-state" style={{ padding: 'var(--space-8) var(--space-6)' }}>
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, marginBottom: 'var(--space-3)' }}>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-            <path d="M11 8v6" />
-            <path d="M8 11h6" />
-          </svg>
+        <div className="empty-state">
+          <div className="empty-state__icon">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+              <path d="M11 8v6" />
+              <path d="M8 11h6" />
+            </svg>
+          </div>
           <p className="empty-state__title">No Skill Evidence Detected Yet</p>
-          <p className="empty-state__desc" style={{ maxWidth: '420px' }}>
+          <p className="empty-state__desc">
             Synchronize your public GitHub repositories and click Run Skill Analysis to populate evidence across track competencies.
           </p>
-          <div className="flex items-center gap-3 mt-4" style={{ justifyContent: 'center' }}>
+          <div className="empty-state__actions">
             <button
               type="button"
               onClick={handleRunAnalysis}
@@ -733,16 +727,18 @@ const SkillGaps = () => {
       {/* Skill Comparison Table */}
       {!loading && !loadError && skills.length > 0 && (
         <section aria-labelledby="gaps-table-heading">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 id="gaps-table-heading" className="section-heading" style={{ marginBottom: '2px' }}>
+          <div className="section-header">
+            <div className="section-header__content">
+              <h2 id="gaps-table-heading" className="section-heading">
                 Required Competencies vs. Scanned Evidence
               </h2>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+              <p className="section-subtitle">
                 {selectedTrack.description}
               </p>
             </div>
-            <span className="badge badge--neutral">{selectedTrack.competencies.length} track requirements</span>
+            <div className="section-header__actions">
+              <span className="badge badge--neutral">{selectedTrack.competencies.length} track requirements</span>
+            </div>
           </div>
 
           <div className="table-container">

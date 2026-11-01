@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSidebar } from '../../context/SidebarContext';
 
 /**
  * AdminSidebar — Dedicated navigation sidebar for the Admin Portal
@@ -64,6 +65,7 @@ const ADMIN_NAV_ITEMS = [
 
 const AdminSidebar = () => {
   const { logout } = useAuth();
+  const { isCollapsed, isMobileOpen, closeMobileSidebar } = useSidebar();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -72,7 +74,12 @@ const AdminSidebar = () => {
   };
 
   return (
-    <aside className="sidebar">
+    <aside
+      id="app-sidebar"
+      className={`sidebar app-sidebar admin-sidebar ${isCollapsed ? 'collapsed' : ''} ${
+        isMobileOpen ? 'mobile-open' : ''
+      }`}
+    >
       <div className="admin-sidebar__header">
         <span className="admin-sidebar__title">Admin Portal</span>
         <span className="admin-badge">ADMIN</span>
@@ -86,6 +93,7 @@ const AdminSidebar = () => {
                 <NavLink
                   to={item.href}
                   end={item.end}
+                  onClick={closeMobileSidebar}
                   className={({ isActive }) =>
                     `sidebar__nav-link${isActive ? ' active' : ''}`
                   }
@@ -106,7 +114,7 @@ const AdminSidebar = () => {
         <p className="sidebar__section-label">Portal Switcher</p>
         <ul className="sidebar__nav">
           <li className="sidebar__nav-item">
-            <NavLink to="/" className="sidebar__nav-link">
+            <NavLink to="/" className="sidebar__nav-link" onClick={closeMobileSidebar}>
               <span className="sidebar__nav-icon">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 13.5L3.5 8 9 2.5" strokeLinecap="round" strokeLinejoin="round" />

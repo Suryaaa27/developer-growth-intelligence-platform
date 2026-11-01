@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import AuthScene from '../components/auth/AuthScene';
 import { authAPI, rolesAPI } from '../services/api';
 
 const CATEGORY_ORDER = [
@@ -142,39 +143,38 @@ const Register = () => {
   };
 
   return (
-    <div className="app-shell">
+    <div className="auth-page">
+      <AuthScene
+        headline="Start your growth journey."
+        subline="Connect GitHub and see which skills your code already shows."
+      />
       <Navbar />
-      <main className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 72px)', padding: 'var(--space-6)' }}>
-        <div className="card" style={{ width: '100%', maxWidth: '480px', padding: 'var(--space-8)' }}>
-          <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
-            <h1 className="page-header__title" style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-2)' }}>
-              Create Your Account
-            </h1>
-            <p className="page-header__subtitle" style={{ margin: 0 }}>
+      <main className="auth-center">
+        <div className="auth-header-block">
+          <h1 className="auth-headline">Start your growth journey.</h1>
+          <p className="auth-subline">Connect GitHub and see which skills your code already shows.</p>
+        </div>
+
+        <div className="auth-card auth-card--wide">
+          <div className="auth-card__head">
+            <h2 className="auth-card__title">Create your DevGrowth account</h2>
+            <p className="auth-card__subtitle">
               Benchmark your GitHub code evidence against targeted developer roles.
             </p>
           </div>
 
           {submittedMessage && (
-            <div
-              className="card card--compact mb-6"
-              style={{
-                backgroundColor: 'var(--color-accent-light)',
-                border: '1px solid var(--color-accent-border)',
-                color: 'var(--color-accent)',
-                fontSize: 'var(--text-sm)',
-              }}
-            >
+            <div className="auth-flash auth-flash--success">
               {submittedMessage}
             </div>
           )}
           {apiError && (
-            <div className="card card--compact mb-6" style={{ backgroundColor: 'var(--color-danger-light)', border: '1px solid var(--color-danger-border)', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+            <div className="auth-flash auth-flash--error">
               {apiError}
             </div>
           )}
           {loading && (
-            <div className="card card--compact mb-6" style={{ backgroundColor: 'var(--color-accent-light)', border: '1px solid var(--color-accent-border)', color: 'var(--color-accent-fg)', fontSize: 'var(--text-sm)' }}>
+            <div className="auth-flash auth-flash--info">
               Registering... Please wait.
             </div>
           )}
@@ -211,12 +211,12 @@ const Register = () => {
             </div>
 
             <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-1)' }}>
+              <div className="auth-role-label-row">
                 <label htmlFor="reg-role" className="form-label" style={{ margin: 0 }}>
-                  Target Engineering Role <span style={{ color: 'var(--color-danger)' }}>*</span>
+                  Target Engineering Role <span className="auth-required">*</span>
                 </label>
                 {rolesLoading && (
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  <span className="auth-loading-hint">
                     Loading catalog...
                   </span>
                 )}
@@ -241,72 +241,78 @@ const Register = () => {
               </select>
               {errors.targetRole && <span className="form-error">{errors.targetRole}</span>}
               {rolesError && (
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning, #d29922)', marginTop: '4px', display: 'block' }}>
+                <span className="auth-role-warning">
                   {rolesError}
                 </span>
               )}
             </div>
 
-            <div className="form-group">
-              <label htmlFor="reg-password" className="form-label">
-                Password (min. 8 characters)
-              </label>
-              <div className="input-password-wrapper">
-                <input
-                  id="reg-password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="form-input"
-                  placeholder="Create a secure password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
+            <div className="auth-row">
+              <div className="form-group">
+                <label htmlFor="reg-password" className="form-label">
+                  Password (min. 8 characters)
+                </label>
+                <div className="input-password-wrapper">
+                  <input
+                    id="reg-password"
+                    type={showPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Create a secure password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {errors.password && <span className="form-error">{errors.password}</span>}
               </div>
-              {errors.password && <span className="form-error">{errors.password}</span>}
+
+              <div className="form-group">
+                <label htmlFor="reg-confirm-password" className="form-label">
+                  Confirm Password
+                </label>
+                <div className="input-password-wrapper">
+                  <input
+                    id="reg-confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Repeat your password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {errors.confirmPassword && <span className="form-error">{errors.confirmPassword}</span>}
+              </div>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="reg-confirm-password" className="form-label">
-                Confirm Password
-              </label>
-              <div className="input-password-wrapper">
-                <input
-                  id="reg-confirm-password"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  className="form-input"
-                  placeholder="Repeat your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showConfirmPassword ? 'Hide' : 'Show'}
-                </button>
-              </div>
-              {errors.confirmPassword && <span className="form-error">{errors.confirmPassword}</span>}
-            </div>
-
-            <button type="submit" className="btn btn--primary w-full" style={{ width: '100%', marginTop: 'var(--space-3)' }}>
-              Create Account
+            <button
+              type="submit"
+              className="btn btn--primary w-full auth-submit"
+              disabled={loading}
+            >
+              {loading ? 'Creating account...' : 'Create Account'}
             </button>
           </form>
 
-          <div className="divider" style={{ margin: 'var(--space-6) 0' }} />
+          <div className="auth-card__divider" />
 
-          <p style={{ textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+          <p className="auth-card__footer">
             Already have an account?{' '}
-            <Link to="/login" style={{ fontWeight: 'var(--fw-semibold)', color: 'var(--color-accent)' }}>
+            <Link to="/login" className="auth-link auth-link--strong">
               Sign In
             </Link>
           </p>

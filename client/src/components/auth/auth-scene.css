@@ -1,0 +1,369 @@
+/* =========================================================
+   DevGrowth – Auth Scene: "Branch Lines"
+   Flat, Minimal Git-Graph Animated Background
+   Primer Design Language · Dark + Light Themes
+   ========================================================= */
+
+:root,
+[data-theme="dark"] {
+  --auth-bg:            #0d1117;
+  --auth-line-main:     #3fb950;
+  --auth-line-sec:      #388bfd;
+  --auth-line-accent:   #d29922;
+  --auth-line-neutral:  #30363d;
+  --auth-chip-bg:       #161b22;
+  --auth-chip-border:   #30363d;
+  --auth-chip-text:     #c9d1d9;
+  --auth-muted:         #8b949e;
+  --auth-danger:        #f85149;
+  --auth-dot-color:     rgba(240, 246, 252, 0.055);
+}
+
+[data-theme="light"] {
+  --auth-bg:            #f6f8fa;
+  --auth-line-main:     #1a7f37;
+  --auth-line-sec:      #0969da;
+  --auth-line-accent:   #bf8700;
+  --auth-line-neutral:  #d0d7de;
+  --auth-chip-bg:       #ffffff;
+  --auth-chip-border:   #d0d7de;
+  --auth-chip-text:     #24292f;
+  --auth-muted:         #57606a;
+  --auth-danger:        #cf222e;
+  --auth-dot-color:     rgba(27, 31, 36, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --auth-bg:            #0d1117;
+    --auth-line-main:     #3fb950;
+    --auth-line-sec:      #388bfd;
+    --auth-line-accent:   #d29922;
+    --auth-line-neutral:  #30363d;
+    --auth-chip-bg:       #161b22;
+    --auth-chip-border:   #30363d;
+    --auth-chip-text:     #c9d1d9;
+    --auth-muted:         #8b949e;
+    --auth-danger:        #f85149;
+    --auth-dot-color:     rgba(240, 246, 252, 0.055);
+  }
+}
+
+/* ── Full-Viewport Auth Page ────────────────────────────── */
+.auth-page {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--auth-bg);
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Solid Navbar on Auth Page (keeps app style) */
+.auth-page .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--navbar-bg);
+  border-bottom: 1px solid var(--navbar-border);
+}
+
+/* ── Fullscreen Branch Lines Background ─────────────────── */
+.auth-scene-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  user-select: none;
+  background-color: var(--auth-bg);
+  transition: opacity 0.3s ease;
+}
+
+/* Faint dotted grid masked with edge fade */
+.auth-scene-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--auth-dot-color) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 92%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 92%);
+}
+
+.auth-scene-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* ── Centered Auth Form Stage ───────────────────────────── */
+.auth-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - var(--navbar-height, 64px));
+  padding: 32px 16px 48px;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+/* ── Clean Headline Block ───────────────────────────────── */
+.auth-header-block {
+  text-align: center;
+  margin-bottom: 24px;
+  max-width: 520px;
+  animation: pageFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-headline {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  line-height: 1.25;
+  margin-bottom: 6px;
+  letter-spacing: -0.3px;
+}
+
+.auth-subline {
+  font-size: 15px;
+  color: var(--auth-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Solid Flat App Card ────────────────────────────────── */
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
+  animation: pageFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.auth-card--wide {
+  max-width: 480px;
+}
+
+.auth-card__head {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.auth-card__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  margin-bottom: 4px;
+  letter-spacing: -0.2px;
+}
+
+.auth-card__subtitle {
+  font-size: 14px;
+  color: var(--auth-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Form group & input typography */
+.auth-card .form-group {
+  margin-bottom: 16px;
+}
+
+.auth-card .form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-fg-default);
+  margin-bottom: 6px;
+}
+
+.auth-card .form-input,
+.auth-card .form-select {
+  width: 100%;
+  height: 38px;
+  background-color: var(--color-canvas-inset);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-fg-default);
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.auth-card .form-input:focus,
+.auth-card .form-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(31, 136, 61, 0.2);
+  outline: none;
+}
+
+.auth-card .form-error {
+  display: block;
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: 4px;
+}
+
+/* Primary Button */
+.auth-submit {
+  width: 100%;
+  height: 38px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+
+/* 2-Column row for passwords */
+.auth-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .auth-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+.auth-card__divider {
+  height: 1px;
+  background-color: var(--color-border-default);
+  margin: 20px 0 16px;
+}
+
+.auth-card__footer {
+  text-align: center;
+  font-size: 14px;
+  color: var(--auth-muted);
+  margin: 0;
+}
+
+.auth-link {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.auth-link--strong {
+  font-weight: 600;
+  color: var(--color-link);
+}
+
+.auth-link--strong:hover {
+  text-decoration: underline;
+}
+
+/* Role select helper styles */
+.auth-role-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.auth-required {
+  color: var(--color-danger);
+}
+
+.auth-loading-hint {
+  font-size: 12px;
+  color: var(--auth-muted);
+}
+
+.auth-role-warning {
+  font-size: 12px;
+  color: var(--color-warning);
+  margin-top: 4px;
+  display: block;
+}
+
+/* ── Flash Feedback Messages ────────────────────────────── */
+.auth-flash {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  animation: pageFadeIn 0.2s ease both;
+}
+
+.auth-flash--success {
+  background-color: var(--color-success-light);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
+}
+
+.auth-flash--error {
+  background-color: var(--color-danger-light);
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+}
+
+.auth-flash--info {
+  background-color: rgba(56, 189, 248, 0.12);
+  border: 1px solid #388bfd;
+  color: var(--color-fg-default);
+}
+
+/* ── Password Focus Calm Mode ───────────────────────────── */
+.auth-page--calm .auth-scene-container {
+  opacity: 0.35;
+}
+
+/* ── Error Shake on Card ────────────────────────────────── */
+.auth-page--error .auth-card {
+  animation: cardErrorShake 0.4s ease both;
+}
+
+@keyframes cardErrorShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* ── Mobile Responsive (<= 768px) ───────────────────────── */
+@media (max-width: 768px) {
+  .auth-headline {
+    font-size: 24px;
+  }
+
+  .auth-subline {
+    font-size: 14px;
+  }
+
+  .auth-card,
+  .auth-card--wide {
+    max-width: 100%;
+    padding: 24px 16px;
+    margin: 0 16px;
+  }
+
+  .auth-center {
+    padding: 24px 8px 36px;
+  }
+}
+
+/* ── Accessibility: Reduced Motion ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .auth-card,
+  .auth-header-block,
+  .auth-flash {
+    animation: none !important;
+  }
+}

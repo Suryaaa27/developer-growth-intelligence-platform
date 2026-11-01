@@ -1,4 +1,14 @@
 import { NavLink } from 'react-router-dom';
+import { useSidebar } from '../context/SidebarContext';
+import {
+  GraphIcon,
+  PersonIcon,
+  RepoIcon,
+  PulseIcon,
+  AlertIcon,
+  MilestoneIcon,
+  MeterIcon,
+} from './icons';
 
 /**
  * Sidebar — primary navigation panel using React Router NavLink
@@ -11,24 +21,12 @@ const NAV_ITEMS = [
       {
         label: 'Dashboard',
         href: '/',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="1" width="6" height="6" rx="1" />
-            <rect x="9" y="1" width="6" height="6" rx="1" />
-            <rect x="1" y="9" width="6" height="6" rx="1" />
-            <rect x="9" y="9" width="6" height="6" rx="1" />
-          </svg>
-        ),
+        icon: <GraphIcon size={16} />,
       },
       {
         label: 'Profile',
         href: '/profile',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-            <path d="M2.5 14a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
-          </svg>
-        ),
+        icon: <PersonIcon size={16} />,
       },
     ],
   },
@@ -38,32 +36,17 @@ const NAV_ITEMS = [
       {
         label: 'Repositories',
         href: '/repositories',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 2h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" />
-            <path d="M4 6h3M4 9h5M4 12h2" strokeLinecap="round" />
-          </svg>
-        ),
+        icon: <RepoIcon size={16} />,
       },
       {
         label: 'Skill Analysis',
         href: '/skills',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="8" cy="8" r="6" />
-            <path d="M8 5v3l2 2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        ),
+        icon: <PulseIcon size={16} />,
       },
       {
         label: 'Skill Gaps',
         href: '/gaps',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8 2v12M2 8h12" strokeLinecap="round" />
-            <circle cx="8" cy="8" r="6" />
-          </svg>
-        ),
+        icon: <AlertIcon size={16} />,
       },
     ],
   },
@@ -73,39 +56,37 @@ const NAV_ITEMS = [
       {
         label: 'Learning Roadmap',
         href: '/roadmap',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 13 6 3l4 6 2-3 2 7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        ),
+        icon: <MilestoneIcon size={16} />,
       },
       {
         label: 'Progress History',
         href: '/progress',
-        icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="9" width="3" height="6" rx="0.5" />
-            <rect x="6" y="5" width="3" height="10" rx="0.5" />
-            <rect x="11" y="2" width="3" height="13" rx="0.5" />
-          </svg>
-        ),
+        icon: <MeterIcon size={16} />,
       },
     ],
   },
 ];
 
 const Sidebar = () => {
+  const { isCollapsed, isMobileOpen, closeMobileSidebar } = useSidebar();
+
   return (
-    <aside className="sidebar">
+    <aside
+      id="app-sidebar"
+      className={`sidebar app-sidebar ${isCollapsed ? 'collapsed' : ''} ${
+        isMobileOpen ? 'mobile-open' : ''
+      }`}
+    >
       {NAV_ITEMS.map((group) => (
         <div key={group.section}>
           <p className="sidebar__section-label">{group.section}</p>
           <ul className="sidebar__nav">
-            {group.items.map((item) => (
-              <li key={item.label} className="sidebar__nav-item">
+            {group.items.map((item, itemIdx) => (
+              <li key={item.label} className="sidebar__nav-item" style={{ '--item-i': itemIdx }}>
                 <NavLink
                   to={item.href}
                   end={item.href === '/'}
+                  onClick={closeMobileSidebar}
                   className={({ isActive }) =>
                     `sidebar__nav-link${isActive ? ' active' : ''}`
                   }

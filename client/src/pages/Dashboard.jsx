@@ -364,10 +364,12 @@ const Dashboard = () => {
     <AppLayout>
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div className="page-header">
-        <h1 className="page-header__title">Dashboard</h1>
-        <p className="page-header__subtitle">
-          An overview of your synchronized repositories, detected technical skill evidence, and analysis results.
-        </p>
+        <div className="page-header__text">
+          <h1 className="page-header__title">Dashboard</h1>
+          <p className="page-header__subtitle">
+            An overview of your synchronized repositories, detected technical skill evidence, and analysis results.
+          </p>
+        </div>
       </div>
 
       {/* ── Sync Alerts ────────────────────────────────────────────────── */}
@@ -393,19 +395,17 @@ const Dashboard = () => {
       )}
 
       {/* ── GitHub Connection + Action Banner ──────────────────────────── */}
-      <div
-        className="card flex items-center justify-between mb-6"
-        style={{
-          gap: 'var(--space-5)',
-          padding: 'var(--space-6) var(--space-8)',
-          backgroundColor: 'var(--color-surface)',
-          borderLeft: '4px solid var(--color-accent)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ flex: '1 1 300px' }}>
-          <div className="flex items-center gap-3" style={{ marginBottom: '4px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 'var(--fw-semibold)', fontSize: 'var(--text-lg)', color: 'var(--color-text-primary)' }}>
+      <div className="callout-banner mb-6">
+        <div className="callout-banner__left">
+          <div className="callout-banner__title-row">
+            <span
+              className={`callout-banner__status-dot ${
+                user?.githubUsername
+                  ? 'callout-banner__status-dot--connected'
+                  : 'callout-banner__status-dot--disconnected'
+              }`}
+            />
+            <span className="callout-banner__title">
               {user?.githubUsername
                 ? `GitHub: Connected as @${user.githubUsername}`
                 : 'GitHub Account: Not Connected'}
@@ -423,25 +423,25 @@ const Dashboard = () => {
               </Link>
             )}
           </div>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 0 }}>
+          <p className="callout-banner__desc">
             {user?.githubUsername
               ? `Public repositories are verified and linked to @${user.githubUsername}. Not your account? Disconnect below to link a different GitHub profile.`
               : 'Connect your GitHub account to import repositories and analyze technical skills.'}
           </p>
           {!user?.githubUsername && (
-            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-2)', marginBottom: 0 }}>
+            <p className="callout-banner__tip">
               💡 <em>Note:</em> GitHub will authorize whichever account is currently signed in on github.com in this browser. To link a different account, log out of GitHub or use a private window.
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
+        <div className="callout-banner__actions">
           {user?.githubUsername ? (
             <>
               <button
                 type="button"
                 id="btn-run-analysis"
-                className="btn btn--primary"
+                className="btn btn--primary btn--sm"
                 onClick={handleRunAnalysis}
                 disabled={isAnalyzing || isSyncing || isDisconnecting}
                 style={{ whiteSpace: 'nowrap' }}
@@ -451,7 +451,7 @@ const Dashboard = () => {
               <button
                 type="button"
                 id="btn-sync-github"
-                className="btn btn--secondary"
+                className="btn btn--secondary btn--sm"
                 onClick={handleSync}
                 disabled={isSyncing || isAnalyzing || isDisconnecting}
                 style={{ whiteSpace: 'nowrap' }}
@@ -496,13 +496,13 @@ const Dashboard = () => {
       </div>
 
       {/* ── Skill Evidence Preview ──────────────────────────────────────── */}
-      <section aria-labelledby="skills-overview" className="reveal-on-scroll" style={{ marginBottom: 'var(--space-8)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 id="skills-overview" className="section-heading" style={{ marginBottom: '2px' }}>
+      <section aria-labelledby="skills-overview" className="reveal-on-scroll" style={{ marginBottom: 'var(--space-section)' }}>
+        <div className="section-header">
+          <div className="section-header__content">
+            <h2 id="skills-overview" className="section-heading">
               Detected Skill Evidence
             </h2>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+            <p className="section-subtitle">
               Evidence strength based on code volume, dependencies, and project manifests detected in
               your repositories.{' '}
               <span style={{ fontStyle: 'italic', opacity: 0.75 }}>
@@ -510,7 +510,7 @@ const Dashboard = () => {
               </span>
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="section-header__actions">
             <Link to="/skills" className="btn btn--secondary btn--sm">
               Full Analysis →
             </Link>
@@ -539,32 +539,34 @@ const Dashboard = () => {
           </div>
         ) : topSkills.length === 0 ? (
           /* Empty state — guide user through the correct steps */
-          <div className="card empty-state" style={{ padding: 'var(--space-8) var(--space-6)' }}>
-            <svg
-              width="44"
-              height="44"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ opacity: 0.4, marginBottom: 'var(--space-3)' }}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-              <path d="M11 8v6" />
-              <path d="M8 11h6" />
-            </svg>
+          <div className="empty-state">
+            <div className="empty-state__icon">
+              <svg
+                width="44"
+                height="44"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ opacity: 0.4 }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+                <path d="M11 8v6" />
+                <path d="M8 11h6" />
+              </svg>
+            </div>
             <p className="empty-state__title">No Skill Evidence Detected Yet</p>
-            <p className="empty-state__desc" style={{ maxWidth: '420px' }}>
+            <p className="empty-state__desc">
               {!user?.githubUsername
                 ? 'Connect your GitHub account, sync repositories, then click Run Skill Analysis to populate your skill profile.'
                 : repositories.length === 0
                 ? 'Sync your GitHub repositories first, then click Run Skill Analysis.'
                 : 'Click Run Skill Analysis to scan your repositories and populate your skill profile.'}
             </p>
-            <div className="flex items-center gap-3 mt-4" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div className="empty-state__actions">
               {!user?.githubUsername ? (
                 <button
                   type="button"
@@ -720,9 +722,9 @@ const Dashboard = () => {
             <div
               style={{
                 padding: 'var(--space-3) var(--space-4)',
-                borderLeft: '3px solid var(--color-accent)',
-                backgroundColor: 'var(--color-surface-2)',
-                borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+                border: '1px solid var(--color-border-default)',
+                backgroundColor: 'var(--color-canvas-inset)',
+                borderRadius: 'var(--radius-sm)',
               }}
             >
               <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', color: 'var(--color-text-primary)', marginBottom: '4px' }}>

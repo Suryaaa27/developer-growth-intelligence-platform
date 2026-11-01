@@ -1,7 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import ThemeSelector from './ThemeSelector';
+import Logo from './Logo';
+import {
+  ChevronDownIcon,
+  PersonIcon,
+  GearIcon,
+  ShieldIcon,
+  SignOutIcon,
+  XIcon,
+} from './icons';
 
 /**
  * Navbar — top application bar with clean branding, responsive auth state,
@@ -9,6 +19,7 @@ import ThemeSelector from './ThemeSelector';
  */
 const Navbar = () => {
   const { user, isAuthenticated, logout, loading } = useAuth();
+  const { isCollapsed, isMobileOpen, toggleSidebar } = useSidebar();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'profile' | 'settings' | null
   const dropdownRef = useRef(null);
@@ -59,19 +70,25 @@ const Navbar = () => {
 
   return (
     <header className="navbar">
-      {/* Logo */}
-      <Link to="/" className="navbar__logo">
-        <div className="navbar__logo-mark">
-          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="8" width="3" height="7" rx="0.5" />
-            <rect x="6" y="4" width="3" height="11" rx="0.5" />
-            <rect x="11" y="1" width="3" height="14" rx="0.5" />
-          </svg>
-        </div>
-        <span className="navbar__logo-text">
-          Dev<span>Growth</span>
-        </span>
-      </Link>
+      {/* Left: Hamburger + Logo */}
+      <div className="navbar__left">
+        <button
+          type="button"
+          className={`icon-btn hamburger ${isMobileOpen ? 'open' : ''}`}
+          aria-label="Toggle sidebar"
+          aria-expanded={isMobileOpen || !isCollapsed}
+          aria-controls="app-sidebar"
+          onClick={toggleSidebar}
+        >
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+        </button>
+
+        <Link to="/" className="navbar__logo" aria-label="DevGrowth Home">
+          <Logo variant="full" size={32} />
+        </Link>
+      </div>
 
       {/* Right side navigation & profile */}
       <div className="navbar__right">
@@ -79,11 +96,10 @@ const Navbar = () => {
         <ThemeSelector />
 
         {!loading && !isAuthenticated && (
-          <div className="navbar__auth-actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div className="navbar__auth-actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <NavLink
               to="/login"
               className="btn btn--secondary btn--sm"
-              style={{ textDecoration: 'none' }}
               id="nav-signin-btn"
             >
               Sign In
@@ -91,7 +107,6 @@ const Navbar = () => {
             <NavLink
               to="/register"
               className="btn btn--primary btn--sm"
-              style={{ textDecoration: 'none' }}
               id="nav-register-btn"
             >
               Get Started
@@ -112,19 +127,10 @@ const Navbar = () => {
                 {initials}
               </div>
               <span className="navbar__user-name">{displayName}</span>
-              <svg
+              <ChevronDownIcon
                 className={`navbar__user-chevron ${dropdownOpen ? 'rotated' : ''}`}
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 6l4 4 4-4" />
-              </svg>
+                size={14}
+              />
             </button>
 
             {dropdownOpen && (
@@ -155,10 +161,7 @@ const Navbar = () => {
                     navigate('/profile');
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+                  <PersonIcon size={16} />
                   <span>View Profile</span>
                 </button>
 
@@ -171,10 +174,7 @@ const Navbar = () => {
                     setActiveModal('settings');
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
+                  <GearIcon size={16} />
                   <span>Account Settings</span>
                 </button>
 
@@ -189,9 +189,7 @@ const Navbar = () => {
                     }}
                     style={{ color: 'var(--color-primary, #6366f1)' }}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
+                    <ShieldIcon size={16} />
                     <span>Admin Portal</span>
                   </button>
                 )}
@@ -204,11 +202,7 @@ const Navbar = () => {
                   id="nav-dropdown-logout"
                   onClick={handleLogout}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
+                  <SignOutIcon size={16} />
                   <span>Logout</span>
                 </button>
               </div>
@@ -232,7 +226,7 @@ const Navbar = () => {
                 onClick={() => setActiveModal(null)}
                 aria-label="Close modal"
               >
-                &times;
+                <XIcon size={16} />
               </button>
             </div>
             <div className="custom-modal__body">
@@ -291,7 +285,7 @@ const Navbar = () => {
                 onClick={() => setActiveModal(null)}
                 aria-label="Close modal"
               >
-                &times;
+                <XIcon size={16} />
               </button>
             </div>
             <div className="custom-modal__body">
