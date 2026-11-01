@@ -27,16 +27,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           gap: '16px',
         }}
       >
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            border: '3px solid var(--border-subtle, rgba(255,255,255,0.1))',
-            borderTopColor: 'var(--color-primary, #6366f1)',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
+        <div className="loading-spinner loading-spinner--lg" />
         <p style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '0.9rem' }}>
           Verifying security credentials...
         </p>

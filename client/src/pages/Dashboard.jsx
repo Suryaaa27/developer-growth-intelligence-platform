@@ -34,11 +34,10 @@ const StatCard = ({ label, value, meta, loading = false }) => (
     <p className="stat-card__label">{label}</p>
     {loading ? (
       <div
+        className="skeleton"
         style={{
           height: '32px',
           width: '60%',
-          backgroundColor: 'var(--color-surface-2)',
-          borderRadius: '4px',
           margin: '4px 0',
         }}
       />
@@ -60,7 +59,7 @@ const AlertBanner = ({ type = 'info', message, linkTo, linkLabel, onDismiss }) =
   const c = colors[type] || colors.info;
   return (
     <div
-      className="card mb-6"
+      className="card mb-6 alert-banner"
       style={{
         borderColor: c.border,
         backgroundColor: c.bg,
@@ -96,7 +95,7 @@ const AlertBanner = ({ type = 'info', message, linkTo, linkLabel, onDismiss }) =
 
 /* ─── Dashboard Page ──────────────────────────────────────────────────────── */
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, refreshUser, updateUser } = useAuth();
 
   // ── Repository state ────────────────────────────────────────────────────
   const [repositories, setRepositories] = useState([]);
@@ -112,6 +111,7 @@ const Dashboard = () => {
   // ── Sync action state ───────────────────────────────────────────────────
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [syncAlert, setSyncAlert] = useState(null); // { type, message, linkTo, linkLabel }
 
   // ── Analysis action state ────────────────────────────────────────────────
@@ -192,6 +192,33 @@ const Dashboard = () => {
     } catch (err) {
       setSyncAlert({ type: 'error', message: err.message || 'Failed to connect to GitHub OAuth service.' });
       setIsLinking(false);
+    }
+  };
+
+  // ── 3b. Handle GitHub account disconnection ──────────────────────────────
+  const handleDisconnectGitHub = async () => {
+    if (!window.confirm(`Are you sure you want to disconnect GitHub account @${user?.githubUsername}? Your analyzed skill evidence and snapshots will be preserved, and you can connect another GitHub account anytime.`)) {
+      return;
+    }
+    setIsDisconnecting(true);
+    setSyncAlert(null);
+    try {
+      const res = await authAPI.disconnectGitHub();
+      if (res?.success) {
+        setSyncAlert({
+          type: 'success',
+          message: res.message || 'GitHub account disconnected successfully. You can now link a different account.',
+        });
+        if (updateUser) updateUser({ githubId: null, githubUsername: null });
+        if (refreshUser) await refreshUser();
+        setRepositories([]);
+      } else {
+        setSyncAlert({ type: 'error', message: res?.message || 'Failed to disconnect GitHub account.' });
+      }
+    } catch (err) {
+      setSyncAlert({ type: 'error', message: err.message || 'Failed to disconnect GitHub account.' });
+    } finally {
+      setIsDisconnecting(false);
     }
   };
 
@@ -388,12 +415,24 @@ const Dashboard = () => {
             ) : (
               <span className="badge badge--neutral">Not Linked</span>
             )}
+            {user?.targetRole && (
+              <Link to="/skills/gaps" style={{ textDecoration: 'none' }}>
+                <span className="badge badge--blue" title="Your targeted engineering role — click to view skill gaps">
+                  🎯 Target: {user.targetRole}
+                </span>
+              </Link>
+            )}
           </div>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 0 }}>
             {user?.githubUsername
-              ? `Public repositories are verified and linked to @${user.githubUsername}. Sync anytime to refresh, then run skill analysis.`
+              ? `Public repositories are verified and linked to @${user.githubUsername}. Not your account? Disconnect below to link a different GitHub profile.`
               : 'Connect your GitHub account to import repositories and analyze technical skills.'}
           </p>
+          {!user?.githubUsername && (
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-2)', marginBottom: 0 }}>
+              💡 <em>Note:</em> GitHub will authorize whichever account is currently signed in on github.com in this browser. To link a different account, log out of GitHub or use a private window.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
@@ -404,7 +443,7 @@ const Dashboard = () => {
                 id="btn-run-analysis"
                 className="btn btn--primary"
                 onClick={handleRunAnalysis}
-                disabled={isAnalyzing || isSyncing}
+                disabled={isAnalyzing || isSyncing || isDisconnecting}
                 style={{ whiteSpace: 'nowrap' }}
               >
                 {isAnalyzing ? 'Analyzing...' : 'Run Skill Analysis'}
@@ -414,7 +453,7 @@ const Dashboard = () => {
                 id="btn-sync-github"
                 className="btn btn--secondary"
                 onClick={handleSync}
-                disabled={isSyncing || isAnalyzing}
+                disabled={isSyncing || isAnalyzing || isDisconnecting}
                 style={{ whiteSpace: 'nowrap' }}
               >
                 {isSyncing ? 'Syncing...' : 'Sync Repositories'}
@@ -422,6 +461,17 @@ const Dashboard = () => {
               <Link to="/repositories" className="btn btn--secondary btn--sm" style={{ whiteSpace: 'nowrap' }}>
                 Manage
               </Link>
+              <button
+                type="button"
+                id="btn-disconnect-github"
+                className="btn btn--secondary btn--sm"
+                onClick={handleDisconnectGitHub}
+                disabled={isDisconnecting || isSyncing || isAnalyzing}
+                style={{ whiteSpace: 'nowrap', color: 'var(--color-danger, #f85149)' }}
+                title="Disconnect your GitHub account"
+              >
+                {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+              </button>
             </>
           ) : (
             <button
@@ -446,7 +496,7 @@ const Dashboard = () => {
       </div>
 
       {/* ── Skill Evidence Preview ──────────────────────────────────────── */}
-      <section aria-labelledby="skills-overview" style={{ marginBottom: 'var(--space-8)' }}>
+      <section aria-labelledby="skills-overview" className="reveal-on-scroll" style={{ marginBottom: 'var(--space-8)' }}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 id="skills-overview" className="section-heading" style={{ marginBottom: '2px' }}>
@@ -471,10 +521,10 @@ const Dashboard = () => {
           /* Loading skeleton */
           <div className="grid-3">
             {[1, 2, 3].map((n) => (
-              <div key={n} className="skill-card" style={{ opacity: 0.5 }}>
-                <div style={{ height: '18px', width: '55%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px', marginBottom: '10px' }} />
-                <div style={{ height: '8px', width: '100%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px', marginBottom: '8px' }} />
-                <div style={{ height: '13px', width: '35%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px' }} />
+              <div key={n} className="skill-card">
+                <div className="skeleton" style={{ height: '18px', width: '55%', marginBottom: '10px' }} />
+                <div className="skeleton" style={{ height: '8px', width: '100%', marginBottom: '8px' }} />
+                <div className="skeleton" style={{ height: '13px', width: '35%' }} />
               </div>
             ))}
           </div>
@@ -576,7 +626,7 @@ const Dashboard = () => {
       {/* ── Recent Repositories + Analysis Action Panel ─────────────────── */}
       <div className="grid-2" style={{ alignItems: 'start' }}>
         {/* Recent Repositories */}
-        <section aria-labelledby="recent-repos-heading">
+        <section aria-labelledby="recent-repos-heading" className="reveal-on-scroll">
           <div className="flex items-center justify-between mb-4">
             <h2 id="recent-repos-heading" className="section-heading" style={{ marginBottom: 0 }}>
               Recent Repositories
@@ -589,10 +639,10 @@ const Dashboard = () => {
           {reposLoading ? (
             <div className="flex flex-col gap-4">
               {[1, 2].map((n) => (
-                <div key={n} className="card" style={{ opacity: 0.6, minHeight: '130px' }}>
-                  <div style={{ height: '18px', width: '40%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px', marginBottom: '10px' }} />
-                  <div style={{ height: '14px', width: '75%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px', marginBottom: '8px' }} />
-                  <div style={{ height: '12px', width: '30%', backgroundColor: 'var(--color-surface-2)', borderRadius: '4px' }} />
+                <div key={n} className="card" style={{ minHeight: '130px' }}>
+                  <div className="skeleton" style={{ height: '18px', width: '40%', marginBottom: '10px' }} />
+                  <div className="skeleton" style={{ height: '14px', width: '75%', marginBottom: '8px' }} />
+                  <div className="skeleton" style={{ height: '12px', width: '30%' }} />
                 </div>
               ))}
             </div>
@@ -655,7 +705,7 @@ const Dashboard = () => {
         </section>
 
         {/* Analysis Action Panel */}
-        <section aria-labelledby="analysis-panel-heading">
+        <section aria-labelledby="analysis-panel-heading" className="reveal-on-scroll">
           <div className="flex items-center justify-between mb-4">
             <h2 id="analysis-panel-heading" className="section-heading" style={{ marginBottom: 0 }}>
               Skill Analysis

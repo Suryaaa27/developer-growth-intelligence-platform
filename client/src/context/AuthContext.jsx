@@ -95,6 +95,10 @@ export const AuthProvider = ({ children }) => {
     return null;
   }, []);
 
+  const updateUser = useCallback((patch) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -105,6 +109,7 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         refreshUser,
+        updateUser,
       }}
     >
       {children}

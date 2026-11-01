@@ -95,9 +95,9 @@ const AdminOverview = () => {
       {loading && (
         <div className="admin-stats-grid">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="admin-stat-card" style={{ opacity: 0.6 }}>
-              <div style={{ height: 16, width: '40%', background: 'var(--color-border-subtle, #e1e4e8)', borderRadius: 4, marginBottom: 12 }} />
-              <div style={{ height: 32, width: '60%', background: 'var(--color-border-subtle, #e1e4e8)', borderRadius: 4 }} />
+            <div key={i} className="admin-stat-card">
+              <div className="skeleton" style={{ height: 16, width: '40%', marginBottom: 12 }} />
+              <div className="skeleton" style={{ height: 32, width: '60%' }} />
             </div>
           ))}
         </div>
@@ -208,7 +208,7 @@ const AdminOverview = () => {
           </div>
 
           {/* Quick Management Shortcuts */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-4, 16px)', marginBottom: 'var(--space-6, 24px)' }}>
+          <div className="reveal-on-scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-4, 16px)', marginBottom: 'var(--space-6, 24px)' }}>
             {/* User Registry Card */}
             <div className="card" style={{ padding: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -278,7 +278,7 @@ const AdminOverview = () => {
 
           {/* System Security & RBAC Status Box */}
           <div
-            className="card"
+            className="card reveal-on-scroll"
             style={{
               padding: '18px 24px',
               borderLeft: '4px solid var(--color-accent, #1f883d)',

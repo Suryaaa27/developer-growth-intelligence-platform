@@ -274,7 +274,7 @@ const SkillAnalysis = () => {
       {/* ── Status / Result Notifications ────────────────────────── */}
       {analysisAlert && (
         <div
-          className="card mb-6"
+          className="card mb-6 alert-banner"
           style={{
             borderLeft: `4px solid ${
               analysisAlert.type === 'success'
@@ -490,9 +490,9 @@ const SkillAnalysis = () => {
         </div>
       ) : (
         /* Categorized Skill Evidence Tables */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+        <div className="tab-content" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
           {filteredCategories.map((group) => (
-            <section key={group.id} aria-labelledby={`sec-${group.id}`}>
+            <section key={group.id} className="reveal-on-scroll" aria-labelledby={`sec-${group.id}`}>
               <div className="flex items-center justify-between mb-4">
                 <h2 id={`sec-${group.id}`} className="section-heading" style={{ marginBottom: 0 }}>
                   {group.category}

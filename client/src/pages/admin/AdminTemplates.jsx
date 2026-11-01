@@ -63,7 +63,7 @@ const AdminTemplates = () => {
   // Open Create Modal
   const openCreateModal = () => {
     setModalMode('create');
-    setSelectedRole(null);
+    setSelectedTemplate(null);
     setFormSkillName('');
     setFormTitle('');
     setFormDescription('');
@@ -220,7 +220,7 @@ const AdminTemplates = () => {
       {/* Notifications banner */}
       {feedback && (
         <div
-          className="card mb-4"
+          className="card mb-4 alert-banner"
           style={{
             backgroundColor: feedback.type === 'success' ? 'var(--color-accent-light, #dafbe1)' : 'var(--color-danger-light, #ffebe9)',
             borderColor: feedback.type === 'success' ? 'var(--color-accent-border, #4ac26b)' : 'var(--color-danger-border, #ff8182)',

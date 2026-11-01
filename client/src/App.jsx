@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 // Developer Portal Pages
 import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
 import GitHubRepositories from './pages/GitHubRepositories';
 import SkillAnalysis from './pages/SkillAnalysis';
 import SkillGaps from './pages/SkillGaps';
@@ -83,6 +84,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProgressHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               }
             />

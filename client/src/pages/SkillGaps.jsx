@@ -1,7 +1,55 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { skillsAPI, analysisAPI } from '../services/api';
+import { skillsAPI, analysisAPI, rolesAPI, userAPI, recommendationsAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+const CATEGORY_ORDER = [
+  'Software Development',
+  'Mobile Development',
+  'Data Engineering & AI',
+  'DevOps & Cloud',
+  'Cybersecurity',
+  'QA & Testing',
+  'Embedded & Systems',
+  'Architecture & Specialized Engineering',
+];
+
+/**
+ * Robust skill matcher comparing required role skill against detected repository skill.
+ */
+const isSkillMatchClient = (reqName, detName) => {
+  if (!reqName || !detName) return false;
+  const r = reqName.toLowerCase().trim();
+  const d = detName.toLowerCase().trim();
+  if (r === d) return true;
+
+  const dBase = detName.replace(/\([^)]*\)/g, '').toLowerCase().trim();
+  if (dBase && dBase === r) return true;
+
+  const dTokens = d.split(/[\s,()/:&+-]+/).filter(Boolean);
+
+  // Short tokens (<= 2 chars) must match exact token
+  if (r.length <= 2) {
+    return dTokens.includes(r);
+  }
+
+  // Compound requirements (e.g. 'PyTorch / TensorFlow', 'C#/.NET')
+  if (r.includes('/') || r.includes('&')) {
+    const parts = r.split(/[/&]/).map((p) => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (part.length <= 2) {
+        if (dTokens.includes(part)) return true;
+      } else if (d.includes(part) || (dBase && dBase.includes(part))) {
+        return true;
+      }
+    }
+  }
+
+  if (d.includes(r) || (r.length >= 4 && dBase.includes(r))) return true;
+  if (d.length >= 4 && r.includes(d)) return true;
+  return false;
+};
 
 /* ── Standard Industry Career Track Benchmarks ── */
 const CAREER_TRACKS = {
@@ -149,7 +197,11 @@ const CAREER_TRACKS = {
 };
 
 const SkillGaps = () => {
+  const { user, updateUser } = useAuth();
+  const [apiRoles, setApiRoles] = useState([]);
   const [selectedRoleKey, setSelectedRoleKey] = useState('java-backend');
+  const [updatingRole, setUpdatingRole] = useState(false);
+  const [roleUpdateMsg, setRoleUpdateMsg] = useState(null);
 
   // Live skills state from GET /api/skills
   const [skills, setSkills] = useState([]);
@@ -157,6 +209,10 @@ const SkillGaps = () => {
   const [loadError, setLoadError] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisAlert, setAnalysisAlert] = useState(null);
+
+  // Admin-curated recommendations state
+  const [recommendations, setRecommendations] = useState([]);
+  const [_recsLoading, setRecsLoading] = useState(false);
 
   // Fetch real skills from backend
   const fetchSkills = useCallback(async () => {
@@ -180,9 +236,97 @@ const SkillGaps = () => {
     }
   }, []);
 
+  // Fetch all engineering roles dynamically from database
+  const fetchRoles = useCallback(async () => {
+    try {
+      const res = await rolesAPI.getAllRoles();
+      if (res?.success && Array.isArray(res?.data?.roles) && res.data.roles.length > 0) {
+        const rolesList = res.data.roles;
+        setApiRoles(rolesList);
+        setSelectedRoleKey((prev) => {
+          // If user has a saved target role or targetRoleId, prioritize it
+          if (user?.targetRoleId) {
+            const matchById = rolesList.find((r) => r.id === user.targetRoleId);
+            if (matchById) return matchById.id.toString();
+          }
+          if (user?.targetRole) {
+            const matchByName = rolesList.find(
+              (r) => r.roleName.toLowerCase() === user.targetRole.toLowerCase()
+            );
+            if (matchByName) return matchByName.id.toString();
+          }
+          const prevMatch = rolesList.find(
+            (r) =>
+              r.id.toString() === prev ||
+              r.roleName.toLowerCase().replace(/[^a-z0-9]/g, '-') === prev ||
+              (prev === 'java-backend' && r.roleName.includes('Java'))
+          );
+          return prevMatch ? prevMatch.id.toString() : rolesList[0].id.toString();
+        });
+      }
+    } catch (err) {
+      console.warn('[SkillGaps fetchRoles Warning]: Using built-in tracks fallback:', err.message);
+    }
+  }, [user?.targetRoleId, user?.targetRole]);
+
   useEffect(() => {
     fetchSkills();
-  }, [fetchSkills]);
+    fetchRoles();
+  }, [fetchSkills, fetchRoles]);
+
+  // Group catalog roles into standardized categories
+  const groupedRoles = useMemo(() => {
+    const groups = {};
+    for (const cat of CATEGORY_ORDER) {
+      groups[cat] = [];
+    }
+    groups['Other Engineering Roles'] = [];
+
+    for (const r of apiRoles) {
+      const cat = r.category && groups[r.category] ? r.category : 'Other Engineering Roles';
+      groups[cat].push(r);
+    }
+
+    return Object.entries(groups).filter(([, items]) => items.length > 0);
+  }, [apiRoles]);
+
+  // Check if currently selected role is the user's saved target role
+  const isCurrentTargetRole = useMemo(() => {
+    if (!user) return false;
+    const activeRole = apiRoles.find((r) => r.id.toString() === selectedRoleKey.toString());
+    if (!activeRole) return false;
+    return (
+      (user.targetRoleId && activeRole.id === user.targetRoleId) ||
+      (user.targetRole && activeRole.roleName.toLowerCase() === user.targetRole.toLowerCase())
+    );
+  }, [user, apiRoles, selectedRoleKey]);
+
+  // Save selected role as user's profile target role
+  const handleSetTargetRole = async () => {
+    const activeRole = apiRoles.find((r) => r.id.toString() === selectedRoleKey.toString());
+    if (!activeRole || !user?.id) return;
+    setUpdatingRole(true);
+    setRoleUpdateMsg(null);
+    try {
+      const res = await userAPI.updateTargetRole(user.id, {
+        targetRole: activeRole.roleName,
+        targetRoleId: activeRole.id,
+      });
+      if (res?.success) {
+        if (updateUser) {
+          updateUser({ targetRole: activeRole.roleName, targetRoleId: activeRole.id });
+        }
+        setRoleUpdateMsg({ type: 'success', text: `Target role successfully updated to "${activeRole.roleName}"!` });
+        setTimeout(() => setRoleUpdateMsg(null), 3500);
+      } else {
+        setRoleUpdateMsg({ type: 'error', text: res?.message || 'Failed to update target role.' });
+      }
+    } catch (err) {
+      setRoleUpdateMsg({ type: 'error', text: err.message || 'Failed to update target role.' });
+    } finally {
+      setUpdatingRole(false);
+    }
+  };
 
   // Run on-demand skill analysis
   const handleRunAnalysis = async () => {
@@ -213,16 +357,107 @@ const SkillGaps = () => {
     }
   };
 
-  const selectedTrack = CAREER_TRACKS[selectedRoleKey] || CAREER_TRACKS['java-backend'];
+  // Derive selected track from API roles or fallback CAREER_TRACKS
+  const selectedTrack = useMemo(() => {
+    if (apiRoles.length > 0) {
+      const found = apiRoles.find((r) => r.id.toString() === selectedRoleKey.toString());
+      if (found) {
+        const skillsList = Array.isArray(found.requiredSkills)
+          ? found.requiredSkills
+          : typeof found.requiredSkills === 'string'
+          ? JSON.parse(found.requiredSkills || '[]')
+          : [];
+
+        return {
+          id: found.id,
+          title: found.roleName,
+          description: found.description || 'Target engineering role specifications and benchmark requirements.',
+          competencies: skillsList.map((s) => ({
+            name: s.name,
+            category: s.category || 'Skill',
+            priority: (s.benchmarkScore || 70) >= 80 ? 'Core' : (s.benchmarkScore || 70) >= 65 ? 'High' : 'Medium',
+            benchmarkScore: s.benchmarkScore || 70,
+            recommendation: `Demonstrate ${s.name} in your repositories via package manifests, configuration files, or primary source code.`,
+          })),
+        };
+      }
+    }
+    return CAREER_TRACKS[selectedRoleKey] || CAREER_TRACKS['java-backend'];
+  }, [apiRoles, selectedRoleKey]);
+
+  // Derive missing skill names from selectedTrack and detected skills
+  const missingSkillNames = useMemo(() => {
+    return (selectedTrack.competencies || [])
+      .filter((comp) => {
+        const detected = skills.some((s) => {
+          if (isSkillMatchClient(comp.name, s.skillName)) return true;
+          if (comp.matchKey) {
+            const sName = (s.skillName || '').toLowerCase();
+            if (sName.includes(comp.matchKey)) return true;
+            if (comp.altKeys && comp.altKeys.some((k) => sName.includes(k))) return true;
+          }
+          return false;
+        });
+        return !detected;
+      })
+      .map((c) => c.name);
+  }, [selectedTrack, skills]);
+
+  const missingSkillsKey = missingSkillNames.join(',');
+
+  // Fetch admin recommendation templates for missing skills
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!missingSkillsKey) {
+      setRecommendations([]);
+      return;
+    }
+
+    const fetchRecommendations = async () => {
+      setRecsLoading(true);
+      try {
+        const queryParams = {
+          skills: missingSkillsKey,
+        };
+        if (selectedRoleKey && !isNaN(Number(selectedRoleKey))) {
+          queryParams.roleId = selectedRoleKey;
+        }
+        const res = await recommendationsAPI.getRecommendations(queryParams);
+        if (!isCancelled && res?.success) {
+          const list = Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res?.data?.recommendations)
+            ? res.data.recommendations
+            : Array.isArray(res?.recommendations)
+            ? res.recommendations
+            : [];
+          setRecommendations(list);
+        }
+      } catch (err) {
+        console.warn('[SkillGaps fetchRecommendations Warning]:', err.message);
+      } finally {
+        if (!isCancelled) setRecsLoading(false);
+      }
+    };
+
+    fetchRecommendations();
+    return () => {
+      isCancelled = true;
+    };
+  }, [missingSkillsKey, selectedRoleKey]);
 
   // Match live detected skills against the selected track competencies
   const competencyComparisons = useMemo(() => {
-    return selectedTrack.competencies.map((comp) => {
+    return (selectedTrack.competencies || []).map((comp) => {
       // Find matching skill from user's live detected skills
       const detected = skills.find((s) => {
-        const sName = (s.skillName || '').toLowerCase();
-        if (sName.includes(comp.matchKey)) return true;
-        if (comp.altKeys && comp.altKeys.some((k) => sName.includes(k))) return true;
+        if (isSkillMatchClient(comp.name, s.skillName)) return true;
+        if (comp.matchKey) {
+          const sName = (s.skillName || '').toLowerCase();
+          if (sName.includes(comp.matchKey)) return true;
+          if (comp.altKeys && comp.altKeys.some((k) => sName.includes(k))) return true;
+        }
         return false;
       });
 
@@ -239,16 +474,20 @@ const SkillGaps = () => {
         };
       }
 
+      // Check if an admin recommendation template matches this missing competency
+      const template = recommendations.find((r) => isSkillMatchClient(comp.name, r.skillName || r.skill_name));
+
       return {
         ...comp,
         status: 'Missing Signal',
         statusClass: 'badge--amber',
         evidenceScore: 0,
-        evidenceDetails: comp.recommendation,
+        evidenceDetails: template ? template.description : comp.recommendation,
+        template: template || null,
         matched: false,
       };
     });
-  }, [selectedTrack, skills]);
+  }, [selectedTrack, skills, recommendations]);
 
   const matchedCount = useMemo(() => {
     return competencyComparisons.filter((c) => c.matched).length;
@@ -284,7 +523,7 @@ const SkillGaps = () => {
       {/* Analysis Alert Banner */}
       {analysisAlert && (
         <div
-          className="card mb-6"
+          className="card mb-6 alert-banner"
           style={{
             borderColor: analysisAlert.type === 'success' ? 'var(--color-success)' : 'var(--color-danger, #f85149)',
             backgroundColor: analysisAlert.type === 'success' ? 'rgba(46,160,67,0.1)' : 'rgba(218,54,51,0.1)',
@@ -331,10 +570,38 @@ const SkillGaps = () => {
 
       {/* Role Selector Controls */}
       <div className="card mb-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ flex: 1, minWidth: '260px' }}>
-          <label htmlFor="role-select" className="form-label" style={{ marginBottom: 'var(--space-2)' }}>
-            Benchmark Engineering Career Track:
-          </label>
+        <div style={{ flex: 1, minWidth: '280px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+            <label htmlFor="role-select" className="form-label" style={{ margin: 0, fontWeight: 'var(--fw-semibold)' }}>
+              Benchmark Engineering Career Track:
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              {isCurrentTargetRole ? (
+                <span className="badge badge--green" style={{ fontSize: 'var(--text-xs)' }}>
+                  ✓ My Target Role
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSetTargetRole}
+                  disabled={updatingRole || !user}
+                  className="btn btn--secondary btn--sm"
+                  style={{ padding: '2px 8px', fontSize: 'var(--text-xs)' }}
+                  title="Save this role as your profile target role"
+                >
+                  {updatingRole ? 'Updating...' : 'Set as My Target Role'}
+                </button>
+              )}
+              <Link
+                to="/profile"
+                style={{ fontSize: 'var(--text-xs)', color: 'var(--color-link)', textDecoration: 'none', marginLeft: 'var(--space-1)' }}
+                title="Manage persistent career target in Profile"
+              >
+                Profile Settings →
+              </Link>
+            </div>
+          </div>
+
           <select
             id="role-select"
             className="form-select"
@@ -342,10 +609,44 @@ const SkillGaps = () => {
             onChange={(e) => setSelectedRoleKey(e.target.value)}
             style={{ fontWeight: 'var(--fw-semibold)' }}
           >
-            <option value="java-backend">Java Backend Developer Track</option>
-            <option value="fullstack-javascript">Full Stack JavaScript Developer Track</option>
-            <option value="devops-cloud">DevOps & Cloud Engineer Track</option>
+            {groupedRoles.length > 0 ? (
+              groupedRoles.map(([category, items]) => (
+                <optgroup key={category} label={category}>
+                  {items.map((r) => (
+                    <option key={r.id} value={r.id.toString()}>
+                      {r.roleName}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            ) : apiRoles.length > 0 ? (
+              apiRoles.map((r) => (
+                <option key={r.id} value={r.id.toString()}>
+                  {r.roleName}
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="java-backend">Java Backend Developer Track</option>
+                <option value="fullstack-javascript">Full Stack JavaScript Developer Track</option>
+                <option value="devops-cloud">DevOps & Cloud Engineer Track</option>
+              </>
+            )}
           </select>
+
+          {roleUpdateMsg && (
+            <p
+              style={{
+                marginTop: 'var(--space-2)',
+                marginBottom: 0,
+                fontSize: 'var(--text-xs)',
+                color: roleUpdateMsg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger, #f85149)',
+                fontWeight: 'var(--fw-medium)',
+              }}
+            >
+              {roleUpdateMsg.text}
+            </p>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
@@ -499,15 +800,126 @@ const SkillGaps = () => {
                       </span>
                     </td>
                     <td>
-                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.5 }}>
-                        {item.evidenceDetails}
-                      </p>
+                      {item.matched ? (
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.5 }}>
+                          {item.evidenceDetails}
+                        </p>
+                      ) : item.template ? (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--fw-bold)', color: 'var(--color-accent)' }}>
+                              {item.template.title}
+                            </span>
+                            {item.template.priority && (
+                              <span className="badge badge--neutral" style={{ fontSize: '10px', padding: '1px 5px' }}>
+                                {item.template.priority}
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: '0 0 6px 0', lineHeight: 1.4 }}>
+                            {item.template.description}
+                          </p>
+                          {item.template.resourceUrl && (
+                            <a
+                              href={item.template.resourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn--secondary btn--sm"
+                              style={{ padding: '2px 8px', fontSize: '11px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              Curated Guide ↗
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.5 }}>
+                          {item.evidenceDetails}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Admin Recommendations Section */}
+          {recommendations.length > 0 && (
+            <div className="card mt-6" style={{ padding: 'var(--space-5)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 'var(--fw-bold)', margin: '0 0 2px 0' }}>
+                    Curated Learning Recommendations for Missing Gaps
+                  </h3>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', margin: 0 }}>
+                    Official administrator-curated guides, best practices, and learning resources mapped directly to your detected gaps.
+                  </p>
+                </div>
+                <Link to="/roadmap" className="btn btn--secondary btn--sm">
+                  View Roadmap →
+                </Link>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
+                {recommendations.map((rec) => (
+                  <div
+                    key={rec.id || rec.skillName}
+                    style={{
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-surface-2)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="badge badge--blue" style={{ fontSize: '11px' }}>
+                          {rec.skillName}
+                        </span>
+                        {rec.priority && (
+                          <span
+                            className={`badge ${
+                              rec.priority === 'CRITICAL'
+                                ? 'badge--danger'
+                                : rec.priority === 'HIGH'
+                                ? 'badge--amber'
+                                : 'badge--neutral'
+                            }`}
+                            style={{ fontSize: '10px' }}
+                          >
+                            {rec.priority}
+                          </span>
+                        )}
+                      </div>
+                      <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--fw-semibold)', margin: '0 0 var(--space-2) 0' }}>
+                        {rec.title}
+                      </h4>
+                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                        {rec.description}
+                      </p>
+                    </div>
+
+                    {rec.resourceUrl && (
+                      <div className="mt-3" style={{ paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border)' }}>
+                        <a
+                          href={rec.resourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn--primary btn--sm"
+                          style={{ width: '100%', justifyContent: 'center', textDecoration: 'none', fontSize: '11px', padding: '4px 8px' }}
+                        >
+                          Access Guide & Docs ↗
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
     </AppLayout>

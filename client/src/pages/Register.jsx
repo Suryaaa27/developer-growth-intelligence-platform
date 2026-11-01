@@ -1,8 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { authAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { authAPI, rolesAPI } from '../services/api';
+
+const CATEGORY_ORDER = [
+  'Software Development',
+  'Mobile Development',
+  'Data Engineering & AI',
+  'DevOps & Cloud',
+  'Cybersecurity',
+  'QA & Testing',
+  'Embedded & Systems',
+  'Architecture & Specialized Engineering',
+];
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -12,14 +22,68 @@ const Register = () => {
     password: '',
     confirmPassword: '',
   });
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
+  const [rolesError, setRolesError] = useState(null);
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [submittedMessage, setSubmittedMessage] = useState(null);
   const navigate = useNavigate();
-  const { login: setAuth } = useAuth();
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
+
+  // Fetch available role catalog dynamically from database
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCatalog = async () => {
+      try {
+        setRolesLoading(true);
+        setRolesError(null);
+        const res = await rolesAPI.getAllRoles();
+        if (isMounted && res?.success && Array.isArray(res?.data?.roles) && res.data.roles.length > 0) {
+          setRoles(res.data.roles);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.warn('[Register] Failed to load role catalog from API:', err.message);
+          setRolesError('Could not load live role catalog. Fallback defaults active.');
+        }
+      } finally {
+        if (isMounted) {
+          setRolesLoading(false);
+        }
+      }
+    };
+    fetchCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Group roles into standardized categories
+  const groupedRoles = useMemo(() => {
+    const sourceRoles = roles.length > 0 ? roles : [
+      { id: 1, roleName: 'Java Backend Developer', category: 'Software Development' },
+      { id: 2, roleName: 'Full Stack JavaScript Developer', category: 'Software Development' },
+      { id: 3, roleName: 'DevOps & Cloud Engineer', category: 'DevOps & Cloud' },
+    ];
+
+    const groups = {};
+    for (const cat of CATEGORY_ORDER) {
+      groups[cat] = [];
+    }
+    groups['Other Engineering Roles'] = [];
+
+    for (const r of sourceRoles) {
+      const cat = r.category && groups[r.category] ? r.category : 'Other Engineering Roles';
+      groups[cat].push(r);
+    }
+
+    return Object.entries(groups).filter(([, items]) => items.length > 0);
+  }, [roles]);
+
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) {
@@ -30,6 +94,10 @@ const Register = () => {
       newErrors.email = 'Email address is required.';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Please provide a valid email format.';
+    }
+
+    if (!formData.targetRole || !formData.targetRole.trim()) {
+      newErrors.targetRole = 'Please select a target engineering role.';
     }
 
     if (!formData.password) {
@@ -143,19 +211,40 @@ const Register = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="reg-role" className="form-label">
-                Target Engineering Role
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-1)' }}>
+                <label htmlFor="reg-role" className="form-label" style={{ margin: 0 }}>
+                  Target Engineering Role <span style={{ color: 'var(--color-danger)' }}>*</span>
+                </label>
+                {rolesLoading && (
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                    Loading catalog...
+                  </span>
+                )}
+              </div>
+
               <select
                 id="reg-role"
                 className="form-select"
                 value={formData.targetRole}
                 onChange={(e) => setFormData({ ...formData, targetRole: e.target.value })}
+                disabled={rolesLoading && roles.length === 0}
               >
-                <option value="Java Backend Developer">Java Backend Developer</option>
-                <option value="Full Stack JavaScript Developer">Full Stack JavaScript Developer</option>
-                <option value="DevOps & Cloud Engineer">DevOps & Cloud Engineer</option>
+                {groupedRoles.map(([category, items]) => (
+                  <optgroup key={category} label={category}>
+                    {items.map((r) => (
+                      <option key={r.id} value={r.roleName}>
+                        {r.roleName}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
+              {errors.targetRole && <span className="form-error">{errors.targetRole}</span>}
+              {rolesError && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning, #d29922)', marginTop: '4px', display: 'block' }}>
+                  {rolesError}
+                </span>
+              )}
             </div>
 
             <div className="form-group">

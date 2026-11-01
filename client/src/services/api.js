@@ -36,11 +36,16 @@ export const authAPI = {
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   getMe: () => request('/auth/me'),
   getGitHubAuthUrl: () => request('/auth/github?format=json'),
+  disconnectGitHub: () => request('/auth/github/disconnect', { method: 'POST' }),
 };
 
 // ── Users (Ownership Protected) ─────────────────────────────
 export const userAPI = {
-  getUserById: (id) => request(`/users/${id}`),
+  updateTargetRole: (id, targetRole) =>
+    request(`/users/${id}/target-role`, {
+      method: 'PATCH',
+      body: JSON.stringify(typeof targetRole === 'object' ? targetRole : { targetRole }),
+    }),
 };
 
 // ── Admin (Role Protected: ADMIN only) ──────────────────────
@@ -70,7 +75,6 @@ export const adminAPI = {
     const query = new URLSearchParams(params).toString();
     return request(`/admin/roles${query ? `?${query}` : ''}`);
   },
-  getRoleById: (id) => request(`/admin/roles/${id}`),
   createRole: (body) => request('/admin/roles', { method: 'POST', body: JSON.stringify(body) }),
   updateRole: (id, body) => request(`/admin/roles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteRole: (id) => request(`/admin/roles/${id}`, { method: 'DELETE' }),
@@ -80,7 +84,6 @@ export const adminAPI = {
     const query = new URLSearchParams(params).toString();
     return request(`/admin/templates${query ? `?${query}` : ''}`);
   },
-  getTemplateById: (id) => request(`/admin/templates/${id}`),
   createTemplate: (body) => request('/admin/templates', { method: 'POST', body: JSON.stringify(body) }),
   updateTemplate: (id, body) => request(`/admin/templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTemplate: (id) => request(`/admin/templates/${id}`, { method: 'DELETE' }),
@@ -91,6 +94,7 @@ export const adminAPI = {
 export const githubAPI = {
   getRepos: () => request('/github/repos'),
   syncRepos: (body) => request('/github/sync', { method: 'POST', body: JSON.stringify(body) }),
+  disconnect: () => request('/github/disconnect', { method: 'POST' }),
 };
 
 // ── Skills ──────────────────────────────────────────────────
@@ -99,19 +103,37 @@ export const skillsAPI = {
   getSkillEvidence: (skillName) => request(`/skills/${encodeURIComponent(skillName)}`),
 };
 
+// ── Roles (Target Job Roles for Users) ──────────────────────
+export const rolesAPI = {
+  getAllRoles: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/roles${query ? `?${query}` : ''}`);
+  },
+};
+
 // ── Analysis ────────────────────────────────────────────────
 export const analysisAPI = {
   runAnalysis: (body = {}) => request('/analysis/run', { method: 'POST', body: JSON.stringify(body) }),
-  getSnapshots: () => request('/analysis/snapshots'),
+  getSnapshots: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/analysis/snapshots${query ? `?${query}` : ''}`);
+  },
 };
 
 // ── Roadmap ─────────────────────────────────────────────────
 export const roadmapAPI = {
   getRoadmap: () => request('/roadmap'),
-  getSkillRecommendations: (skillName) => request(`/roadmap/${skillName}`),
+  updateTaskProgress: (taskKey, body) =>
+    request(`/roadmap/tasks/${encodeURIComponent(taskKey)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
 };
 
-// ── Progress ────────────────────────────────────────────────
-export const progressAPI = {
-  getProgress: () => request('/progress'),
+// ── Recommendations (Admin-Curated Templates for Missing Skills) ──
+export const recommendationsAPI = {
+  getRecommendations: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/recommendations${query ? `?${query}` : ''}`);
+  },
 };

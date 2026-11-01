@@ -24,7 +24,7 @@ const formatDate = (dateString) => {
 };
 
 const GitHubRepositories = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, updateUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State for repository data: separated into owned and collaborations
@@ -37,6 +37,7 @@ const GitHubRepositories = () => {
   // State for synchronization action
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [syncError, setSyncError] = useState(null);
   const [syncSuccess, setSyncSuccess] = useState(null);
 
@@ -85,7 +86,7 @@ const GitHubRepositories = () => {
     } else if (error) {
       const errorMap = {
         access_denied: 'GitHub authorization was cancelled or access was denied.',
-        account_already_linked: 'This GitHub account is already linked to another DevGrowth user.',
+        account_already_linked: 'This GitHub account is already linked to another DevGrowth user. If you are signed into the wrong account on GitHub, please sign out of GitHub (or use a private window) to authorize your own account.',
         invalid_state: 'Invalid or expired authorization request. Please try linking again.',
         missing_code_or_state: 'Missing authorization code or state from GitHub callback.',
         token_exchange_failed: 'Failed to exchange authorization code with GitHub.',
@@ -116,6 +117,32 @@ const GitHubRepositories = () => {
     } catch (err) {
       setSyncError(err.message || 'Failed to connect to GitHub OAuth service.');
       setIsLinking(false);
+    }
+  };
+
+  // Handle GitHub account disconnection
+  const handleDisconnectGitHub = async () => {
+    if (!window.confirm(`Are you sure you want to disconnect GitHub account @${user?.githubUsername}? Your analyzed skill evidence and snapshots will be preserved, and you can connect another GitHub account anytime.`)) {
+      return;
+    }
+    setIsDisconnecting(true);
+    setSyncError(null);
+    setSyncSuccess(null);
+    try {
+      const res = await authAPI.disconnectGitHub();
+      if (res?.success) {
+        setSyncSuccess(res.message || 'GitHub account disconnected successfully. You can now link a different account.');
+        if (updateUser) updateUser({ githubId: null, githubUsername: null });
+        if (refreshUser) await refreshUser();
+        setOwnedRepositories([]);
+        setCollaborations([]);
+      } else {
+        setSyncError(res?.message || 'Failed to disconnect GitHub account.');
+      }
+    } catch (err) {
+      setSyncError(err.message || 'Failed to disconnect GitHub account.');
+    } finally {
+      setIsDisconnecting(false);
     }
   };
 
@@ -252,9 +279,14 @@ const GitHubRepositories = () => {
             </div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
               {user?.githubUsername
-                ? `Repositories are synchronized directly for your verified GitHub profile (@${user.githubUsername}). Repositories you own are distinguished from collaborations.`
+                ? `Repositories are synchronized directly for your verified GitHub profile (@${user.githubUsername}). If this is not your account, click Disconnect Account below to switch.`
                 : 'Authenticate with GitHub to securely link your developer profile and import verified repositories.'}
             </p>
+            {!user?.githubUsername && (
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-2)', marginBottom: 0 }}>
+                💡 <em>Note:</em> GitHub will authorize whichever account is currently signed in on github.com in this browser. To connect a different account, log out of GitHub (or open an incognito window) first.
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
@@ -265,7 +297,7 @@ const GitHubRepositories = () => {
                   id="btn-sync-github"
                   className="btn btn--primary"
                   onClick={handleSync}
-                  disabled={isSyncing}
+                  disabled={isSyncing || isDisconnecting}
                   style={{ whiteSpace: 'nowrap' }}
                 >
                   {isSyncing ? 'Syncing...' : 'Sync Repositories'}
@@ -273,11 +305,12 @@ const GitHubRepositories = () => {
                 <button
                   type="button"
                   className="btn btn--secondary btn--sm"
-                  onClick={handleLinkGitHub}
-                  disabled={isLinking}
-                  title="Link a different GitHub account or refresh authorization"
+                  onClick={handleDisconnectGitHub}
+                  disabled={isDisconnecting || isSyncing}
+                  style={{ color: 'var(--color-danger, #f85149)' }}
+                  title="Disconnect your GitHub account from JobPortal"
                 >
-                  {isLinking ? 'Connecting...' : 'Re-link Account'}
+                  {isDisconnecting ? 'Disconnecting...' : 'Disconnect Account'}
                 </button>
               </>
             ) : (
@@ -298,7 +331,7 @@ const GitHubRepositories = () => {
         {/* Sync Success Notification */}
         {syncSuccess && (
           <div
-            className="card mt-4"
+            className="card mt-4 alert-banner"
             style={{
               marginTop: 'var(--space-4)',
               backgroundColor: 'rgba(46, 160, 67, 0.1)',
@@ -328,7 +361,7 @@ const GitHubRepositories = () => {
         {/* Sync Error Notification */}
         {syncError && (
           <div
-            className="card mt-4"
+            className="card mt-4 alert-banner"
             style={{
               marginTop: 'var(--space-4)',
               backgroundColor: 'rgba(218, 54, 51, 0.1)',

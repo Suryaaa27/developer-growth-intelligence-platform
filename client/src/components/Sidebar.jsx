@@ -20,6 +20,16 @@ const NAV_ITEMS = [
           </svg>
         ),
       },
+      {
+        label: 'Profile',
+        href: '/profile',
+        icon: (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+            <path d="M2.5 14a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
+          </svg>
+        ),
+      },
     ],
   },
   {
