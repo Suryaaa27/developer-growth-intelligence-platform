@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { skillsAPI, analysisAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { GitHubIcon } from '../components/icons';
 
 /**
  * Format timestamp into human-readable date.
@@ -461,8 +462,9 @@ const SkillAnalysis = () => {
           </p>
           <div className="flex items-center gap-3 mt-4" style={{ flexWrap: 'wrap' }}>
             {!user?.githubUsername ? (
-              <Link to="/repositories" className="btn btn--primary">
-                Link GitHub Account
+              <Link to="/repositories" className="btn btn--primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <GitHubIcon size={16} aria-hidden="true" />
+                <span>Link GitHub Account</span>
               </Link>
             ) : (
               <button

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import RepositoryCard from '../components/RepositoryCard';
+import Logo from '../components/Logo';
+import { GitHubIcon } from '../components/icons';
 import { githubAPI, authAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -320,9 +322,10 @@ const GitHubRepositories = () => {
                 className="btn btn--primary"
                 onClick={handleLinkGitHub}
                 disabled={isLinking}
-                style={{ whiteSpace: 'nowrap' }}
+                style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               >
-                {isLinking ? 'Redirecting to GitHub...' : 'Connect GitHub Account'}
+                <GitHubIcon size={16} aria-hidden="true" />
+                <span>{isLinking ? 'Redirecting to GitHub...' : 'Connect GitHub Account'}</span>
               </button>
             )}
           </div>
@@ -625,9 +628,7 @@ const GitHubRepositories = () => {
           {activeRepositories.length === 0 ? (
             /* Empty State for the active tab */
             <div className="card empty-state">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-              </svg>
+              <Logo variant="mark" size={48} style={{ opacity: 0.7, marginBottom: 'var(--space-2)' }} aria-hidden="true" />
               <p className="empty-state__title">
                 {activeTab === 'collaborations'
                   ? 'No Collaboration Repositories Found'
@@ -637,8 +638,8 @@ const GitHubRepositories = () => {
                 {activeTab === 'collaborations'
                   ? 'Repositories shared with you by other developers or organizations will appear here when you synchronize.'
                   : user?.githubUsername
-                  ? `Click Sync Repositories to import repositories owned by @${user.githubUsername}.`
-                  : 'Connect your GitHub account above and synchronize repositories to populate your skill evidence.'}
+                    ? `Click Sync Repositories to import repositories owned by @${user.githubUsername}.`
+                    : 'Connect your GitHub account above and synchronize repositories to populate your skill evidence.'}
               </p>
             </div>
           ) : filteredRepos.length > 0 ? (

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import useReducedMotion from './useReducedMotion';
 import './auth-scene.css';
 
-/* ── Commit messages and skill detection labels ──────────────────────────── */
+/* ── Commit messages & Skill detection label catalog ──────────────────────── */
 const COMMIT_MESSAGES = [
   'feat: add login',
   'fix: null check',
@@ -21,12 +21,32 @@ const SKILL_DETECTIONS = [
   'Node.js detected',
 ];
 
+/* Pre-measure label widths once to avoid any per-frame text measurements */
+const LABEL_WIDTH_MAP = {};
+const measureLabelsOnce = () => {
+  if (typeof document === 'undefined') return;
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = '500 11px ui-monospace, SFMono-Regular, Consolas, monospace';
+  [
+    ...COMMIT_MESSAGES,
+    ...SKILL_DETECTIONS,
+    'Target: Java Backend Developer',
+    'merged',
+    'revert',
+    'commit',
+  ].forEach((lbl) => {
+    LABEL_WIDTH_MAP[lbl] = Math.ceil(ctx.measureText(lbl).width);
+  });
+};
+measureLabelsOnce();
+
 /**
  * Full-screen Git Graph ("Branch Lines") Background
  * Flat, minimal orthogonal branches with commit nodes, rounded corners,
  * and small mono labels. Zero gradients, zero glow, zero blur.
  */
-const AuthScene = ({ headline, subline }) => {
+const AuthScene = ({ headline: _headline, subline: _subline }) => {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const prefersReducedMotion = useReducedMotion();
@@ -57,11 +77,12 @@ const AuthScene = ({ headline, subline }) => {
     isCalm: false,
     isError: false,
     isSuccess: false,
+    successEndTime: 0,
     isVisible: true,
     isTabActive: true,
   });
 
-  // 1. Read flat theme colors at start & on theme change
+  // 1. Read CSS variables at draw time & whenever data-theme or scheme changes
   useEffect(() => {
     const updateColors = () => {
       const isDark =
@@ -70,6 +91,38 @@ const AuthScene = ({ headline, subline }) => {
           window.matchMedia('(prefers-color-scheme: dark)').matches);
 
       stateRef.current.isDark = isDark;
+
+      if (containerRef.current) {
+        const cs = getComputedStyle(containerRef.current);
+        const bg = cs.getPropertyValue('--bl-bg').trim();
+        const main = cs.getPropertyValue('--bl-main').trim();
+        const sec = cs.getPropertyValue('--bl-secondary').trim();
+        const accent = cs.getPropertyValue('--bl-accent').trim();
+        const neutral = cs.getPropertyValue('--bl-neutral').trim();
+        const chipBg = cs.getPropertyValue('--bl-chip-bg').trim();
+        const chipBorder = cs.getPropertyValue('--bl-chip-border').trim();
+        const chipText = cs.getPropertyValue('--bl-chip-text').trim();
+        const danger = cs.getPropertyValue('--bl-danger').trim();
+        const muted = cs.getPropertyValue('--bl-muted').trim();
+
+        if (bg) {
+          stateRef.current.colors = {
+            bg,
+            main: main || (isDark ? '#3fb950' : '#1a7f37'),
+            sec: sec || (isDark ? '#388bfd' : '#0969da'),
+            accent: accent || (isDark ? '#d29922' : '#bf8700'),
+            neutral: neutral || (isDark ? '#30363d' : '#d0d7de'),
+            chipBg: chipBg || (isDark ? '#161b22' : '#ffffff'),
+            chipBorder: chipBorder || (isDark ? '#30363d' : '#d0d7de'),
+            chipText: chipText || (isDark ? '#c9d1d9' : '#24292f'),
+            danger: danger || (isDark ? '#f85149' : '#cf222e'),
+            muted: muted || (isDark ? '#8b949e' : '#57606a'),
+          };
+          return;
+        }
+      }
+
+      // Direct fallback
       stateRef.current.colors = isDark
         ? {
             bg: '#0d1117',
@@ -165,9 +218,10 @@ const AuthScene = ({ headline, subline }) => {
 
       if (hasSuccess) {
         stateRef.current.isSuccess = true;
+        stateRef.current.successEndTime = Date.now() + 2000;
         setTimeout(() => {
           stateRef.current.isSuccess = false;
-        }, 1500);
+        }, 2200);
       }
     };
 
@@ -196,7 +250,7 @@ const AuthScene = ({ headline, subline }) => {
   // 4. Main Canvas Git-Graph Simulation Loop
   useEffect(() => {
     if (prefersReducedMotion) {
-      // Draw static composition with 3 clean orthogonal branches
+      // Draw static composition with 4 branches and 5 labels
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -206,36 +260,84 @@ const AuthScene = ({ headline, subline }) => {
         const main = isDark ? '#3fb950' : '#1a7f37';
         const sec = isDark ? '#388bfd' : '#0969da';
         const bg = isDark ? '#0d1117' : '#f6f8fa';
+        const chipBg = isDark ? '#161b22' : '#ffffff';
+        const chipBorder = isDark ? '#30363d' : '#d0d7de';
+        const chipText = isDark ? '#c9d1d9' : '#24292f';
 
-        ctx.strokeStyle = main;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(w * 0.1, h * 0.2);
-        ctx.lineTo(w * 0.35, h * 0.2);
-        ctx.arcTo(w * 0.45, h * 0.2, w * 0.45, h * 0.45, 14);
-        ctx.lineTo(w * 0.45, h * 0.6);
-        ctx.stroke();
+        // 4 orthogonal static branches
+        const staticBranches = [
+          {
+            color: main,
+            width: 2,
+            pts: [{ x: w * 0.08, y: h * 0.2 }, { x: w * 0.32, y: h * 0.2 }, { x: w * 0.32, y: h * 0.52 }],
+          },
+          {
+            color: sec,
+            width: 2,
+            pts: [{ x: w * 0.92, y: h * 0.25 }, { x: w * 0.68, y: h * 0.25 }, { x: w * 0.68, y: h * 0.55 }],
+          },
+          {
+            color: main,
+            width: 1.5,
+            pts: [{ x: w * 0.15, y: h * 0.8 }, { x: w * 0.38, y: h * 0.8 }, { x: w * 0.38, y: h * 0.65 }],
+          },
+          {
+            color: sec,
+            width: 1.5,
+            pts: [{ x: w * 0.85, y: h * 0.78 }, { x: w * 0.62, y: h * 0.78 }, { x: w * 0.62, y: h * 0.62 }],
+          },
+        ];
 
-        ctx.strokeStyle = sec;
-        ctx.beginPath();
-        ctx.moveTo(w * 0.9, h * 0.7);
-        ctx.lineTo(w * 0.6, h * 0.7);
-        ctx.arcTo(w * 0.55, h * 0.7, w * 0.55, h * 0.5, 14);
-        ctx.lineTo(w * 0.55, h * 0.35);
-        ctx.stroke();
-
-        // 3 sample nodes
-        [{ x: w * 0.22, y: h * 0.2, c: main }, { x: w * 0.45, y: h * 0.45, c: main }, { x: w * 0.75, y: h * 0.7, c: sec }].forEach(
-          (nd) => {
-            ctx.beginPath();
-            ctx.arc(nd.x, nd.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = bg;
-            ctx.fill();
-            ctx.strokeStyle = nd.c;
-            ctx.lineWidth = 2;
-            ctx.stroke();
+        staticBranches.forEach((b) => {
+          ctx.strokeStyle = b.color;
+          ctx.lineWidth = b.width;
+          ctx.beginPath();
+          ctx.moveTo(b.pts[0].x, b.pts[0].y);
+          for (let i = 1; i < b.pts.length - 1; i++) {
+            ctx.arcTo(b.pts[i].x, b.pts[i].y, b.pts[i + 1].x, b.pts[i + 1].y, 14);
           }
-        );
+          ctx.lineTo(b.pts[b.pts.length - 1].x, b.pts[b.pts.length - 1].y);
+          ctx.stroke();
+        });
+
+        // 5 commit nodes with chips
+        const staticNodes = [
+          { x: w * 0.2, y: h * 0.2, color: main, label: 'feat: add login' },
+          { x: w * 0.32, y: h * 0.38, color: main, label: 'Java detected' },
+          { x: w * 0.8, y: h * 0.25, color: sec, label: 'fix: null check' },
+          { x: w * 0.68, y: h * 0.42, color: sec, label: 'React detected' },
+          { x: w * 0.26, y: h * 0.8, color: main, label: 'test: add unit tests' },
+        ];
+
+        staticNodes.forEach((nd) => {
+          // Hollow node
+          ctx.beginPath();
+          ctx.arc(nd.x, nd.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = bg;
+          ctx.fill();
+          ctx.strokeStyle = nd.color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Chip
+          const textW = LABEL_WIDTH_MAP[nd.label] || 80;
+          const pillW = textW + 16;
+          const chipX = nd.x;
+          const chipY = nd.y - 18;
+
+          ctx.beginPath();
+          ctx.roundRect(chipX - pillW / 2, chipY - 10, pillW, 20, 4);
+          ctx.fillStyle = chipBg;
+          ctx.fill();
+          ctx.strokeStyle = chipBorder;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = chipText;
+          ctx.font = '500 11px ui-monospace, SFMono-Regular, Consolas, monospace';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(nd.label, chipX - textW / 2, chipY);
+        });
       }
       return;
     }
@@ -267,7 +369,7 @@ const AuthScene = ({ headline, subline }) => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // ── Spawner function ─────────────────────────────────────────────────────
+    // ── Spawner function avoiding card rectangle + 40px corridor ─────────────
     const spawnBranch = (now, w, h) => {
       const isMobile = w <= 768;
       const maxBranches = isMobile ? 3 : 6;
@@ -278,31 +380,40 @@ const AuthScene = ({ headline, subline }) => {
       const isMain = count % 2 !== 0; // Alternating main vs secondary
       const isBg = Math.random() < 0.4; // 40% background layer
 
+      // Card avoidance corridor
+      const cardW = isMobile ? w * 0.9 : 440;
+      const cardLeft = (w - cardW) / 2 - 40;
+      const cardRight = (w + cardW) / 2 + 40;
+
       // Spawn outside a random edge (0: Top, 1: Right, 2: Bottom, 3: Left)
       const edge = Math.floor(Math.random() * 4);
       let x = 0;
       let y = 0;
-      let dir = { dx: 0, dy: 0 }; // Initial orthogonal unit vector
+      let dir = { dx: 0, dy: 0 };
 
       if (edge === 0) {
-        x = w * 0.15 + Math.random() * (w * 0.7);
+        // Top edge (avoid card center corridor)
+        x = Math.random() < 0.5 ? Math.random() * Math.max(10, cardLeft) : cardRight + Math.random() * (w - cardRight);
         y = -10;
         dir = { dx: 0, dy: 1 };
       } else if (edge === 1) {
+        // Right edge
         x = w + 10;
         y = h * 0.15 + Math.random() * (h * 0.7);
         dir = { dx: -1, dy: 0 };
       } else if (edge === 2) {
-        x = w * 0.15 + Math.random() * (w * 0.7);
+        // Bottom edge
+        x = Math.random() < 0.5 ? Math.random() * Math.max(10, cardLeft) : cardRight + Math.random() * (w - cardRight);
         y = h + 10;
         dir = { dx: 0, dy: -1 };
       } else {
+        // Left edge
         x = -10;
         y = h * 0.15 + Math.random() * (h * 0.7);
         dir = { dx: 1, dy: 0 };
       }
 
-      const speed = isBg ? 80 + Math.random() * 20 : 110 + Math.random() * 30; // 90-140 px/s
+      const speed = isBg ? 80 + Math.random() * 15 : 110 + Math.random() * 25; // 90-140 px/s
 
       stateRef.current.branches.push({
         id: count,
@@ -319,7 +430,7 @@ const AuthScene = ({ headline, subline }) => {
         distToNextNode: 90 + Math.random() * 70, // 90-160px
         nodes: [],
         stopped: false,
-        stopReason: null, // 'merged' | 'edge'
+        stopReason: null, // 'merged' | 'edge' | 'aged'
         stopTime: 0,
         labelCounter: 0,
       });
@@ -352,14 +463,14 @@ const AuthScene = ({ headline, subline }) => {
         ctx.clearRect(0, 0, w, h);
 
         const pointerMovedRecently = now - st.pointer.lastMoved < 2000;
-        const speedScale = st.isCalm ? 0.4 : st.isError ? 0.0 : 1.0;
+        const speedScale = st.isCalm ? 0.4 : st.isError ? 0.0 : st.isSuccess ? 1.8 : 1.0;
 
         // 3. Update branches
         for (let bIdx = st.branches.length - 1; bIdx >= 0; bIdx--) {
           const b = st.branches[bIdx];
           const age = (now - b.birth) / 1000;
 
-          // Check life / retracting
+          // Check max age (14s)
           if (age > 14 && !b.stopped) {
             b.stopped = true;
             b.stopReason = 'aged';
@@ -385,7 +496,7 @@ const AuthScene = ({ headline, subline }) => {
               // Every 2nd node gets a label chip
               if (b.labelCounter % 2 === 0) {
                 // Rare accent "target role" marker
-                if (!st.hasAccentTarget && Math.random() < 0.2) {
+                if (!st.hasAccentTarget && Math.random() < 0.18) {
                   label = 'Target: Java Backend Developer';
                   isAccent = true;
                   st.hasAccentTarget = true;
@@ -406,7 +517,7 @@ const AuthScene = ({ headline, subline }) => {
               });
             }
 
-            // Check if ready to turn 90 degrees
+            // Check if ready to turn 90 degrees (every 120-260px)
             if (b.distSinceLastTurn >= b.distToNextTurn) {
               b.distSinceLastTurn = 0;
               b.distToNextTurn = 120 + Math.random() * 140;
@@ -417,15 +528,13 @@ const AuthScene = ({ headline, subline }) => {
               // Choose orthogonal turn (-90 or +90)
               let turnDir = Math.random() < 0.5 ? 1 : -1;
 
-              // Biased toward cursor if cursor moved in last 2s (60% bias)
+              // Biased toward cursor: 60% bias if pointer moved in last 2s
               if (pointerMovedRecently && Math.random() < 0.6) {
                 const cx = st.pointer.x;
                 const cy = st.pointer.y;
                 if (b.dir.dx !== 0) {
-                  // Currently moving horizontal -> turn vertical
                   turnDir = cy > b.head.y ? 1 : -1;
                 } else {
-                  // Currently moving vertical -> turn horizontal
                   turnDir = cx > b.head.x ? 1 : -1;
                 }
               }
@@ -437,7 +546,7 @@ const AuthScene = ({ headline, subline }) => {
               }
             }
 
-            // Check merge: within 60px of another branch
+            // Check merge: within 60px of another branch's segment
             for (let oIdx = 0; oIdx < st.branches.length; oIdx++) {
               if (oIdx === bIdx) continue;
               const other = st.branches[oIdx];
@@ -476,7 +585,6 @@ const AuthScene = ({ headline, subline }) => {
 
           // Retract & prune old stopped branches (fade out over 1.5s)
           if (b.stopped && now - b.stopTime > 1500) {
-            // Free accent target if this branch had it
             if (b.nodes.some((nd) => nd.isAccent)) {
               st.hasAccentTarget = false;
             }
@@ -485,7 +593,7 @@ const AuthScene = ({ headline, subline }) => {
           }
         }
 
-        // 4. Draw branches in two layers (background then foreground)
+        // 4. Draw branches in two subtle depth layers (background then foreground)
         [true, false].forEach((isBgLayer) => {
           for (let b of st.branches) {
             if (b.isBg !== isBgLayer) continue;
@@ -505,6 +613,7 @@ const AuthScene = ({ headline, subline }) => {
             // Stroke color (main vs secondary, or danger during error flash)
             let lineColor = b.isMain ? colors.main : colors.sec;
             if (st.isError) lineColor = colors.danger;
+            if (st.isSuccess) lineColor = colors.main;
 
             ctx.strokeStyle = lineColor;
             ctx.lineWidth = b.isBg ? 1.5 : 2.0;
@@ -565,7 +674,7 @@ const AuthScene = ({ headline, subline }) => {
 
               let nodeColor = nd.isAccent ? colors.accent : lineColor;
 
-              // Hollow commit node
+              // Hollow commit node (fill = background)
               ctx.beginPath();
               ctx.arc(nd.x, nd.y, rNode, 0, Math.PI * 2);
               ctx.fillStyle = colors.bg;
@@ -577,14 +686,19 @@ const AuthScene = ({ headline, subline }) => {
               // Draw chip label (if present or if hovered)
               if (nd.label || isHovered) {
                 const labelText = nd.label || 'commit';
-                ctx.font = '500 11px ui-monospace, SFMono-Regular, Consolas, monospace';
-                const textW = ctx.measureText(labelText).width;
+                const textW = LABEL_WIDTH_MAP[labelText] || 75;
                 const padX = 8;
                 const pillW = textW + padX * 2 + (nd.isAccent ? 14 : 0);
                 const pillH = 22;
 
                 const offsetX = nd.side * (pillW / 2 + 14);
-                const chipX = nd.x + offsetX;
+                let chipX = nd.x + offsetX;
+                // Clamp within canvas boundaries to prevent text truncation
+                if (chipX + pillW / 2 > w - 10) {
+                  chipX = w - 10 - pillW / 2;
+                } else if (chipX - pillW / 2 < 10) {
+                  chipX = 10 + pillW / 2;
+                }
                 const chipY = nd.y;
 
                 // Pill background
@@ -596,7 +710,7 @@ const AuthScene = ({ headline, subline }) => {
                 ctx.lineWidth = 1;
                 ctx.stroke();
 
-                // Flag icon for accent
+                // Flag icon for accent target
                 if (nd.isAccent) {
                   ctx.fillStyle = colors.accent;
                   ctx.beginPath();
@@ -607,10 +721,23 @@ const AuthScene = ({ headline, subline }) => {
                   ctx.fillRect(chipX - pillW / 2 + 5, chipY - 5, 1.5, 10);
                 }
 
+                // Checkmark dot for skill detections
+                if (!nd.isAccent && nd.label && nd.label.includes('detected')) {
+                  ctx.fillStyle = nodeColor;
+                  ctx.beginPath();
+                  ctx.arc(chipX - pillW / 2 + 7, chipY, 2.5, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+
                 // Text
                 ctx.fillStyle = nd.isAccent ? colors.accent : colors.chipText;
+                ctx.font = '500 11px ui-monospace, SFMono-Regular, Consolas, monospace';
                 ctx.textBaseline = 'middle';
-                const textDrawX = nd.isAccent ? chipX - pillW / 2 + 16 : chipX - textW / 2;
+                const textDrawX = nd.isAccent
+                  ? chipX - pillW / 2 + 16
+                  : nd.label && nd.label.includes('detected')
+                  ? chipX - textW / 2 + 4
+                  : chipX - textW / 2;
                 ctx.fillText(labelText, textDrawX, chipY + 0.5);
               }
             }

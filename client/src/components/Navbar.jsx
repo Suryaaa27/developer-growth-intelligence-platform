@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
 import ThemeSelector from './ThemeSelector';
@@ -17,13 +17,24 @@ import {
  * Navbar — top application bar with clean branding, responsive auth state,
  * profile trigger, and account actions dropdown.
  */
-const Navbar = () => {
+const Navbar = ({ showSidebarToggle = true }) => {
   const { user, isAuthenticated, logout, loading } = useAuth();
   const { isCollapsed, isMobileOpen, toggleSidebar } = useSidebar();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'profile' | 'settings' | null
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+  const shouldShowToggle = showSidebarToggle && !isAuthPage;
+
+  // Ensure body scroll is unlocked on auth pages
+  useEffect(() => {
+    if (isAuthPage) {
+      document.body.style.overflow = '';
+    }
+  }, [isAuthPage]);
 
   // Close dropdown on outside click or escape key
   useEffect(() => {
@@ -72,18 +83,20 @@ const Navbar = () => {
     <header className="navbar">
       {/* Left: Hamburger + Logo */}
       <div className="navbar__left">
-        <button
-          type="button"
-          className={`icon-btn hamburger ${isMobileOpen ? 'open' : ''}`}
-          aria-label="Toggle sidebar"
-          aria-expanded={isMobileOpen || !isCollapsed}
-          aria-controls="app-sidebar"
-          onClick={toggleSidebar}
-        >
-          <span className="hamburger-line" />
-          <span className="hamburger-line" />
-          <span className="hamburger-line" />
-        </button>
+        {shouldShowToggle && (
+          <button
+            type="button"
+            className={`icon-btn hamburger ${isMobileOpen ? 'open' : ''}`}
+            aria-label="Toggle sidebar"
+            aria-expanded={isMobileOpen || !isCollapsed}
+            aria-controls="app-sidebar"
+            onClick={toggleSidebar}
+          >
+            <span className="hamburger-line" />
+            <span className="hamburger-line" />
+            <span className="hamburger-line" />
+          </button>
+        )}
 
         <Link to="/" className="navbar__logo" aria-label="DevGrowth Home">
           <Logo variant="full" size={32} />

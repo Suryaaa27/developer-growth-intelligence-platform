@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import SkillCard from '../components/SkillCard';
 import RepositoryCard from '../components/RepositoryCard';
+import Logo from '../components/Logo';
+import { GitHubIcon } from '../components/icons';
 import { useAuth } from '../context/AuthContext';
 import { githubAPI, authAPI, skillsAPI, analysisAPI } from '../services/api';
 
@@ -480,9 +482,10 @@ const Dashboard = () => {
               className="btn btn--primary"
               onClick={handleLinkGitHub}
               disabled={isLinking}
-              style={{ whiteSpace: 'nowrap' }}
+              style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             >
-              {isLinking ? 'Redirecting to GitHub...' : 'Connect GitHub Account'}
+              <GitHubIcon size={16} aria-hidden="true" />
+              <span>{isLinking ? 'Redirecting to GitHub...' : 'Connect GitHub Account'}</span>
             </button>
           )}
         </div>
@@ -573,8 +576,10 @@ const Dashboard = () => {
                   onClick={handleLinkGitHub}
                   disabled={isLinking}
                   className="btn btn--primary btn--sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  {isLinking ? 'Redirecting...' : 'Connect GitHub'}
+                  <GitHubIcon size={16} aria-hidden="true" />
+                  <span>{isLinking ? 'Redirecting...' : 'Connect GitHub'}</span>
                 </button>
               ) : (
                 <button
@@ -626,7 +631,7 @@ const Dashboard = () => {
       </section>
 
       {/* ── Recent Repositories + Analysis Action Panel ─────────────────── */}
-      <div className="grid-2" style={{ alignItems: 'start' }}>
+      <div className="grid-2 dashboard-split" style={{ alignItems: 'start' }}>
         {/* Recent Repositories */}
         <section aria-labelledby="recent-repos-heading" className="reveal-on-scroll">
           <div className="flex items-center justify-between mb-4">
@@ -659,15 +664,20 @@ const Dashboard = () => {
             </div>
           ) : !user?.githubUsername ? (
             <div className="card empty-state" style={{ padding: 'var(--space-6) var(--space-4)' }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5, marginBottom: 'var(--space-2)' }}>
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-              </svg>
+              <Logo variant="mark" size={44} style={{ opacity: 0.7, marginBottom: 'var(--space-2)' }} aria-hidden="true" />
               <p className="empty-state__title" style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-1)' }}>No GitHub Account Connected</p>
               <p className="empty-state__desc" style={{ fontSize: 'var(--text-sm)', maxWidth: '360px', marginBottom: 'var(--space-4)' }}>
                 Connect your GitHub account to import and analyze your public repositories.
               </p>
-              <button type="button" onClick={handleLinkGitHub} disabled={isLinking} className="btn btn--primary btn--sm">
-                {isLinking ? 'Redirecting...' : 'Connect GitHub Account'}
+              <button
+                type="button"
+                onClick={handleLinkGitHub}
+                disabled={isLinking}
+                className="btn btn--primary btn--sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <GitHubIcon size={16} aria-hidden="true" />
+                <span>{isLinking ? 'Redirecting...' : 'Connect GitHub Account'}</span>
               </button>
             </div>
           ) : repositories.length === 0 ? (

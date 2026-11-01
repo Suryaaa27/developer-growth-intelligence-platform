@@ -114,7 +114,7 @@ const Login = () => {
         headline="Grow from what you have built."
         subline="We turn your repositories into a skill roadmap."
       />
-      <Navbar />
+      <Navbar showSidebarToggle={false} />
       <main className="auth-center">
         <div className="auth-header-block">
           <h1 className="auth-headline">Grow from what you have built.</h1>

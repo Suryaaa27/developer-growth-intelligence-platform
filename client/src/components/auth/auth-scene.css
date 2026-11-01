@@ -6,46 +6,46 @@
 
 :root,
 [data-theme="dark"] {
-  --auth-bg:            #0d1117;
-  --auth-line-main:     #3fb950;
-  --auth-line-sec:      #388bfd;
-  --auth-line-accent:   #d29922;
-  --auth-line-neutral:  #30363d;
-  --auth-chip-bg:       #161b22;
-  --auth-chip-border:   #30363d;
-  --auth-chip-text:     #c9d1d9;
-  --auth-muted:         #8b949e;
-  --auth-danger:        #f85149;
-  --auth-dot-color:     rgba(240, 246, 252, 0.055);
+  --bl-bg:          #0d1117;
+  --bl-main:        #3fb950;
+  --bl-secondary:   #388bfd;
+  --bl-accent:      #d29922;
+  --bl-neutral:     #30363d;
+  --bl-chip-bg:     #161b22;
+  --bl-chip-border: #30363d;
+  --bl-chip-text:   #c9d1d9;
+  --bl-muted:       #8b949e;
+  --bl-danger:      #f85149;
+  --bl-dot:         rgba(240, 246, 252, 0.055);
 }
 
 [data-theme="light"] {
-  --auth-bg:            #f6f8fa;
-  --auth-line-main:     #1a7f37;
-  --auth-line-sec:      #0969da;
-  --auth-line-accent:   #bf8700;
-  --auth-line-neutral:  #d0d7de;
-  --auth-chip-bg:       #ffffff;
-  --auth-chip-border:   #d0d7de;
-  --auth-chip-text:     #24292f;
-  --auth-muted:         #57606a;
-  --auth-danger:        #cf222e;
-  --auth-dot-color:     rgba(27, 31, 36, 0.05);
+  --bl-bg:          #f6f8fa;
+  --bl-main:        #1a7f37;
+  --bl-secondary:   #0969da;
+  --bl-accent:      #bf8700;
+  --bl-neutral:     #d0d7de;
+  --bl-chip-bg:     #ffffff;
+  --bl-chip-border: #d0d7de;
+  --bl-chip-text:   #24292f;
+  --bl-muted:       #57606a;
+  --bl-danger:      #cf222e;
+  --bl-dot:         rgba(27, 31, 36, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --auth-bg:            #0d1117;
-    --auth-line-main:     #3fb950;
-    --auth-line-sec:      #388bfd;
-    --auth-line-accent:   #d29922;
-    --auth-line-neutral:  #30363d;
-    --auth-chip-bg:       #161b22;
-    --auth-chip-border:   #30363d;
-    --auth-chip-text:     #c9d1d9;
-    --auth-muted:         #8b949e;
-    --auth-danger:        #f85149;
-    --auth-dot-color:     rgba(240, 246, 252, 0.055);
+    --bl-bg:          #0d1117;
+    --bl-main:        #3fb950;
+    --bl-secondary:   #388bfd;
+    --bl-accent:      #d29922;
+    --bl-neutral:     #30363d;
+    --bl-chip-bg:     #161b22;
+    --bl-chip-border: #30363d;
+    --bl-chip-text:   #c9d1d9;
+    --bl-muted:       #8b949e;
+    --bl-danger:      #f85149;
+    --bl-dot:         rgba(240, 246, 252, 0.055);
   }
 }
 
@@ -53,8 +53,9 @@
 .auth-page {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
-  background-color: var(--auth-bg);
+  background-color: var(--bl-bg);
   overflow-x: hidden;
   overflow-y: auto;
   box-sizing: border-box;
@@ -77,15 +78,15 @@
   pointer-events: none;
   overflow: hidden;
   user-select: none;
-  background-color: var(--auth-bg);
+  background-color: var(--bl-bg);
   transition: opacity 0.3s ease;
 }
 
-/* Faint dotted grid masked with edge fade */
+/* Optional faint dotted grid only (1px dots every 28px, 5-6% opacity) */
 .auth-scene-dots {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(var(--auth-dot-color) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(var(--bl-dot) 1.2px, transparent 1.2px);
   background-size: 28px 28px;
   mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 92%);
   -webkit-mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 92%);
@@ -106,6 +107,7 @@
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - var(--navbar-height, 64px));
+  min-height: calc(100dvh - var(--navbar-height, 64px));
   padding: 32px 16px 48px;
   position: relative;
   z-index: 1;
@@ -121,7 +123,7 @@
 }
 
 .auth-headline {
-  font-size: 28px;
+  font-size: clamp(22px, 4vw, 28px);
   font-weight: 600;
   color: var(--color-fg-default);
   line-height: 1.25;
@@ -130,8 +132,8 @@
 }
 
 .auth-subline {
-  font-size: 15px;
-  color: var(--auth-muted);
+  font-size: clamp(14px, 2.6vw, 15px);
+  color: var(--bl-muted);
   line-height: 1.5;
   margin: 0;
 }
@@ -170,7 +172,7 @@
 
 .auth-card__subtitle {
   font-size: 14px;
-  color: var(--auth-muted);
+  color: var(--bl-muted);
   line-height: 1.5;
   margin: 0;
 }
@@ -249,7 +251,7 @@
 .auth-card__footer {
   text-align: center;
   font-size: 14px;
-  color: var(--auth-muted);
+  color: var(--bl-muted);
   margin: 0;
 }
 
@@ -281,7 +283,7 @@
 
 .auth-loading-hint {
   font-size: 12px;
-  color: var(--auth-muted);
+  color: var(--bl-muted);
 }
 
 .auth-role-warning {
@@ -315,7 +317,7 @@
 
 .auth-flash--info {
   background-color: rgba(56, 189, 248, 0.12);
-  border: 1px solid #388bfd;
+  border: 1px solid var(--bl-secondary);
   color: var(--color-fg-default);
 }
 

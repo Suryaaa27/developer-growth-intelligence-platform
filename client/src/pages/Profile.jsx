@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useAuth } from '../context/AuthContext';
 import { rolesAPI, userAPI } from '../services/api';
+import { GitHubIcon } from '../components/icons';
 
 const CATEGORY_ORDER = [
   'Software Development',
@@ -301,8 +302,9 @@ const Profile = () => {
                   </Link>
                 </div>
               ) : (
-                <Link to="/" className="btn btn--primary btn--sm" style={{ textDecoration: 'none' }}>
-                  Connect GitHub on Dashboard →
+                <Link to="/" className="btn btn--primary btn--sm" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <GitHubIcon size={14} aria-hidden="true" />
+                  <span>Connect GitHub on Dashboard →</span>
                 </Link>
               )}
             </div>

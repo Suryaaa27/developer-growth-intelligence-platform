@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import AuthScene from '../components/auth/AuthScene';
+import Logo from '../components/Logo';
 import { authAPI, rolesAPI } from '../services/api';
 
 const CATEGORY_ORDER = [
@@ -148,7 +149,7 @@ const Register = () => {
         headline="Start your growth journey."
         subline="Connect GitHub and see which skills your code already shows."
       />
-      <Navbar />
+      <Navbar showSidebarToggle={false} />
       <main className="auth-center">
         <div className="auth-header-block">
           <h1 className="auth-headline">Start your growth journey.</h1>
@@ -157,6 +158,7 @@ const Register = () => {
 
         <div className="auth-card auth-card--wide">
           <div className="auth-card__head">
+            <Logo variant="mark" size={48} animated className="auth-logo" />
             <h2 className="auth-card__title">Create your DevGrowth account</h2>
             <p className="auth-card__subtitle">
               Benchmark your GitHub code evidence against targeted developer roles.
