@@ -23,7 +23,8 @@
     "test:ownership": "node scripts/testRepoOwnershipAndFiltering.js",
     "test:roadmap": "node scripts/testLearningRoadmap.js",
     "test:recommendations": "node scripts/testRecommendations.js",
-    "test:role:safety": "node scripts/testSafeRoleDeletion.js"
+    "test:role:safety": "node scripts/testSafeRoleDeletion.js",
+    "test:audit": "node scripts/testSkillAnalysisAndEvidenceAudit.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

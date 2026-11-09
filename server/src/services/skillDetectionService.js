@@ -130,8 +130,8 @@ const mergeEvidenceBySkill = (records) => {
       // Combine scores
       existing.confidenceScore = combineConfidenceScores(existing._allScores);
 
-      // Prefer the most informative evidenceType label
-      const typePriority = ['language_bytes', 'dependency', 'config_file'];
+      // Prefer the most informative evidenceType label: specific engineering artifacts over generic language bytes
+      const typePriority = ['dependency', 'config_file', 'language_bytes'];
       const bestType = existing._allTypes
         .slice()
         .sort((a, b) => typePriority.indexOf(a) - typePriority.indexOf(b))[0];

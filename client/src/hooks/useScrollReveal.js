@@ -15,13 +15,16 @@ export function useScrollReveal(containerRef) {
 
     // Honor accessibility: if user prefers reduced motion, reveal instantly
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     const root = containerRef?.current || document;
-    const elements = root.querySelectorAll('.reveal-on-scroll');
-    if (!elements || elements.length === 0) return;
+
+    const revealElement = (el) => {
+      if (el && !el.classList.contains('is-revealed')) {
+        el.classList.add('is-revealed');
+      }
+    };
 
     if (prefersReducedMotion || !('IntersectionObserver' in window)) {
-      elements.forEach((el) => el.classList.add('is-revealed'));
+      root.querySelectorAll('.reveal-on-scroll').forEach(revealElement);
       return;
     }
 
@@ -41,14 +44,29 @@ export function useScrollReveal(containerRef) {
       }
     );
 
-    elements.forEach((el) => {
-      if (!el.classList.contains('is-revealed')) {
-        observer.observe(el);
-      }
-    });
+    const observeUnrevealed = () => {
+      const elements = root.querySelectorAll('.reveal-on-scroll');
+      elements.forEach((el) => {
+        if (!el.classList.contains('is-revealed')) {
+          observer.observe(el);
+        }
+      });
+    };
+
+    observeUnrevealed();
+
+    // Observe newly added DOM nodes dynamically (e.g. after async fetch or tab switch)
+    let mutationObserver = null;
+    if ('MutationObserver' in window) {
+      mutationObserver = new MutationObserver(() => {
+        observeUnrevealed();
+      });
+      mutationObserver.observe(root, { childList: true, subtree: true });
+    }
 
     return () => {
       observer.disconnect();
+      if (mutationObserver) mutationObserver.disconnect();
     };
   }, [containerRef]);
 }

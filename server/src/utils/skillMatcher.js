@@ -43,6 +43,14 @@ export const isSkillMatch = (reqName, detName) => {
   // Exact match
   if (rNorm === dNorm) return true;
 
+  // Strict disambiguation: 'Java' must NEVER match 'JavaScript' or 'TypeScript'
+  if (rNorm === 'java' && (dNorm === 'javascript' || dNorm.includes('javascript'))) {
+    return false;
+  }
+  if (dNorm === 'java' && (rNorm === 'javascript' || rNorm.includes('javascript'))) {
+    return false;
+  }
+
   // Strip parentheticals from detected: 'Jest (Testing)' -> 'jest'
   const dBase = normalize(detName.replace(/\([^)]*\)/g, ''));
   if (dBase && dBase === rNorm) return true;
@@ -62,6 +70,7 @@ export const isSkillMatch = (reqName, detName) => {
       if (part.length <= 2) {
         if (dTokens.includes(part)) return true;
       } else if (dNorm.includes(part) || (dBase && dBase.includes(part))) {
+        if (part === 'java' && (dNorm === 'javascript' || dNorm.includes('javascript'))) continue;
         return true;
       }
     }

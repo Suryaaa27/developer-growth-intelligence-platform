@@ -1781,6 +1781,44 @@ code, kbd, samp, pre {
   color: var(--color-fg-default);
 }
 
+/* ── Filter Bar & Search Input ─────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  max-width: 420px;
+  flex: 1;
+}
+
+.search-input-wrapper svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+  color: var(--color-fg-muted);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.search-input-wrapper .form-input,
+.search-input-wrapper input {
+  padding-left: 36px;
+  width: 100%;
+}
+
 /* ── GitHub-Style Auth / Sign In Page ──────────────────── */
 .auth-page {
   min-height: 100vh;
@@ -2348,6 +2386,16 @@ code, kbd, samp, pre {
 
   .page-header__actions .btn {
     flex: 1 1 auto;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input-wrapper {
+    max-width: 100%;
+    width: 100%;
   }
 }
 

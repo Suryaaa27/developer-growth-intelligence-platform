@@ -59,7 +59,6 @@ export const LANGUAGE_SKILL_MAP = {
   Shell: 'Shell Scripting',
   PowerShell: 'PowerShell',
   // Infrastructure / Config
-  Dockerfile: 'Docker',
   HCL: 'Terraform (HCL)',
   Nix: 'Nix',
 };

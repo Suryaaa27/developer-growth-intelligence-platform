@@ -21,19 +21,20 @@ const CROSS_REPO_BONUS = 3;
  * @returns {'Language' | 'Framework' | 'Database' | 'Tool' | 'Architecture'}
  */
 export const resolveSkillCategory = (skillName, evidenceType) => {
-  if (evidenceType === 'language_bytes') return 'Language';
-
   const lowerName = String(skillName).toLowerCase();
 
+  for (const item of FILE_EVIDENCE_MAP) {
+    if (item.skillName.toLowerCase() === lowerName) return item.category;
+  }
   for (const dep of Object.values(NPM_SKILL_MAP)) {
     if (dep.skillName.toLowerCase() === lowerName) return dep.category;
   }
   for (const dep of Object.values(MAVEN_SKILL_MAP)) {
     if (dep.skillName.toLowerCase() === lowerName) return dep.category;
   }
-  for (const item of FILE_EVIDENCE_MAP) {
-    if (item.skillName.toLowerCase() === lowerName) return item.category;
-  }
+
+  if (evidenceType === 'language_bytes') return 'Language';
+
   for (const lang of Object.values(LANGUAGE_SKILL_MAP)) {
     if (lang.toLowerCase() === lowerName) return 'Language';
   }
@@ -43,10 +44,10 @@ export const resolveSkillCategory = (skillName, evidenceType) => {
 
 /**
  * Select the primary evidence type based on priority order:
- * language_bytes > dependency > config_file
+ * dependency > config_file > language_bytes
  */
 const pickPrimaryEvidenceType = (types) => {
-  const priority = ['language_bytes', 'dependency', 'config_file'];
+  const priority = ['dependency', 'config_file', 'language_bytes'];
   const sorted = types
     .slice()
     .sort((a, b) => {
@@ -115,6 +116,12 @@ export const getUserSkills = async (req, res) => {
       const ownerLogin = row.owner_login || (row.repo_full_name ? row.repo_full_name.split('/')[0] : null);
       const isOwner = userGithub ? (ownerLogin || '').toLowerCase() === userGithub : true;
 
+      // Disambiguate legacy records where Docker from Dockerfile was labeled language_bytes
+      let evidenceType = row.evidence_type;
+      if (evidenceType === 'language_bytes' && canonicalName === 'Docker' && (row.evidence_details || '').includes('Dockerfile')) {
+        evidenceType = 'config_file';
+      }
+
       const repoInfo = {
         id: row.repo_id,
         repoName: row.repo_name,
@@ -127,7 +134,7 @@ export const getUserSkills = async (req, res) => {
       if (!existing) {
         skillMap.set(canonicalName, {
           skillName: canonicalName,
-          evidenceTypes: [row.evidence_type],
+          evidenceTypes: [evidenceType],
           scores: [Number(row.confidence_score) || 0],
           repositories: [repoInfo],
           repoIds: new Set([row.repo_id]),
@@ -135,7 +142,7 @@ export const getUserSkills = async (req, res) => {
           lastDetectedAt: row.detected_at,
         });
       } else {
-        existing.evidenceTypes.push(row.evidence_type);
+        existing.evidenceTypes.push(evidenceType);
         existing.scores.push(Number(row.confidence_score) || 0);
 
         if (!existing.repoIds.has(row.repo_id)) {
@@ -272,12 +279,20 @@ export const getSkillEvidence = async (req, res) => {
       Math.round(bestScore + CROSS_REPO_BONUS * (repoCount - 1))
     );
 
-    const primaryType = pickPrimaryEvidenceType(rows.map((r) => r.evidence_type));
+    const normalizedTypes = rows.map((r) =>
+      r.evidence_type === 'language_bytes' && canonicalSkillName === 'Docker' && (r.evidence_details || '').includes('Dockerfile')
+        ? 'config_file'
+        : r.evidence_type
+    );
+    const primaryType = pickPrimaryEvidenceType(normalizedTypes);
     const category = resolveSkillCategory(canonicalSkillName, primaryType);
 
     const evidenceRecords = rows.map((r) => {
       const ownerLogin = r.owner_login || (r.repo_full_name ? r.repo_full_name.split('/')[0] : null);
       const isOwner = userGithub ? (ownerLogin || '').toLowerCase() === userGithub : true;
+      const evidenceType = r.evidence_type === 'language_bytes' && canonicalSkillName === 'Docker' && (r.evidence_details || '').includes('Dockerfile')
+        ? 'config_file'
+        : r.evidence_type;
       return {
         id: r.id,
         repositoryId: r.repository_id,
@@ -289,7 +304,7 @@ export const getSkillEvidence = async (req, res) => {
         ownerLogin,
         isOwner,
         isFork: Boolean(r.is_fork),
-        evidenceType: r.evidence_type,
+        evidenceType,
         evidenceDetails: r.evidence_details,
         evidenceFilePath: r.evidence_file_path,
         confidenceScore: Number(r.confidence_score) || 0,

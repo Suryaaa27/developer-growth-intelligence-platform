@@ -25,6 +25,10 @@ const isSkillMatchClient = (reqName, detName) => {
   const d = detName.toLowerCase().trim();
   if (r === d) return true;
 
+  // Strict disambiguation: 'Java' must NEVER match 'JavaScript' or 'TypeScript'
+  if (r === 'java' && (d === 'javascript' || d.includes('javascript'))) return false;
+  if (d === 'java' && (r === 'javascript' || r.includes('javascript'))) return false;
+
   const dBase = detName.replace(/\([^)]*\)/g, '').toLowerCase().trim();
   if (dBase && dBase === r) return true;
 
@@ -42,6 +46,7 @@ const isSkillMatchClient = (reqName, detName) => {
       if (part.length <= 2) {
         if (dTokens.includes(part)) return true;
       } else if (d.includes(part) || (dBase && dBase.includes(part))) {
+        if (part === 'java' && (d === 'javascript' || d.includes('javascript'))) continue;
         return true;
       }
     }
@@ -394,6 +399,7 @@ const SkillGaps = () => {
           if (isSkillMatchClient(comp.name, s.skillName)) return true;
           if (comp.matchKey) {
             const sName = (s.skillName || '').toLowerCase();
+            if (comp.matchKey === 'java' && (sName === 'javascript' || sName.includes('javascript'))) return false;
             if (sName.includes(comp.matchKey)) return true;
             if (comp.altKeys && comp.altKeys.some((k) => sName.includes(k))) return true;
           }
@@ -456,6 +462,7 @@ const SkillGaps = () => {
         if (isSkillMatchClient(comp.name, s.skillName)) return true;
         if (comp.matchKey) {
           const sName = (s.skillName || '').toLowerCase();
+          if (comp.matchKey === 'java' && (sName === 'javascript' || sName.includes('javascript'))) return false;
           if (sName.includes(comp.matchKey)) return true;
           if (comp.altKeys && comp.altKeys.some((k) => sName.includes(k))) return true;
         }

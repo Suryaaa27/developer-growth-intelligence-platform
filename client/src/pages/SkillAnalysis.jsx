@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { skillsAPI, analysisAPI } from '../services/api';
@@ -187,11 +188,106 @@ const SkillAnalysis = () => {
     }
   };
 
-  const handleCloseEvidenceModal = () => {
+  const handleCloseEvidenceModal = useCallback(() => {
     setInspectingSkill(null);
     setEvidenceData(null);
     setEvidenceError(null);
-  };
+  }, []);
+
+  // ── Lock background scroll & remove outer page scrollbar when modal opens ──
+  useEffect(() => {
+    if (!inspectingSkill) return;
+
+    // 1. Identify scroll containers
+    const docEl = document.documentElement;
+    const bodyEl = document.body;
+    const mainEl = document.getElementById('main');
+
+    // 2. Save original overflow and padding styles
+    const prevDocOverflow = docEl.style.overflow;
+    const prevBodyOverflow = bodyEl.style.overflow;
+    const prevBodyPaddingRight = bodyEl.style.paddingRight;
+
+    const prevMainOverflow = mainEl ? mainEl.style.overflow : '';
+    const prevMainOverflowY = mainEl ? mainEl.style.overflowY : '';
+    const prevMainPaddingRight = mainEl ? mainEl.style.paddingRight : '';
+
+    // 3. Save scroll positions
+    const prevWindowScrollX = window.scrollX || window.pageXOffset || 0;
+    const prevWindowScrollY = window.scrollY || window.pageYOffset || 0;
+    const prevMainScrollTop = mainEl ? mainEl.scrollTop : 0;
+    const prevMainScrollLeft = mainEl ? mainEl.scrollLeft : 0;
+
+    // 4. Calculate scrollbar widths to prevent layout shifts
+    const windowScrollbarWidth = window.innerWidth - docEl.clientWidth;
+    const mainScrollbarWidth = mainEl ? mainEl.offsetWidth - mainEl.clientWidth : 0;
+
+    if (windowScrollbarWidth > 0) {
+      bodyEl.style.paddingRight = `${windowScrollbarWidth}px`;
+    }
+
+    if (mainEl && mainScrollbarWidth > 0) {
+      const currentPadding = parseFloat(window.getComputedStyle(mainEl).paddingRight) || 0;
+      mainEl.style.paddingRight = `${currentPadding + mainScrollbarWidth}px`;
+    }
+
+    // 5. Apply scroll lock to completely remove the outer page scrollbar
+    docEl.style.overflow = 'hidden';
+    bodyEl.style.overflow = 'hidden';
+    if (mainEl) {
+      mainEl.style.overflow = 'hidden';
+      mainEl.style.overflowY = 'hidden';
+    }
+
+    // 6. Handle Escape key to close modal
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCloseEvidenceModal();
+      }
+    };
+
+    // 7. Prevent background touchmove / wheel outside the modal dialog
+    const handleWheel = (e) => {
+      const modalContent = document.querySelector('.custom-modal');
+      if (modalContent && !modalContent.contains(e.target)) {
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      const modalBody = document.querySelector('.custom-modal__body');
+      if (modalBody && modalBody.contains(e.target)) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    // 8. Cleanup and restore original styles and scroll positions
+    return () => {
+      docEl.style.overflow = prevDocOverflow;
+      bodyEl.style.overflow = prevBodyOverflow;
+      bodyEl.style.paddingRight = prevBodyPaddingRight;
+
+      if (mainEl) {
+        mainEl.style.overflow = prevMainOverflow;
+        mainEl.style.overflowY = prevMainOverflowY;
+        mainEl.style.paddingRight = prevMainPaddingRight;
+        mainEl.scrollTop = prevMainScrollTop;
+        mainEl.scrollLeft = prevMainScrollLeft;
+      }
+
+      window.scrollTo(prevWindowScrollX, prevWindowScrollY);
+
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [inspectingSkill, handleCloseEvidenceModal]);
 
   // ── 4. Categorized Skills Grouping ─────────────────────────────────────────
   const uniqueCategories = useMemo(() => {
@@ -418,7 +514,7 @@ const SkillAnalysis = () => {
           </div>
 
           <div className="search-input-wrapper" style={{ minWidth: '220px', maxWidth: '320px' }}>
-            <svg viewBox="0 0 16 16" fill="currentColor">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M11.5 7a4.499 4.499 0 1 1-8.998 0A4.499 4.499 0 0 1 11.5 7zm-.82 4.74a6 6 0 1 0-1.06 1.06l3.04 3.04a.75.75 0 1 0 1.06-1.06l-3.04-3.04z" />
             </svg>
             <input
@@ -494,7 +590,7 @@ const SkillAnalysis = () => {
         /* Categorized Skill Evidence Tables */
         <div className="tab-content" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
           {filteredCategories.map((group) => (
-            <section key={group.id} className="reveal-on-scroll" aria-labelledby={`sec-${group.id}`}>
+            <section key={group.id} className="reveal-on-scroll is-revealed" aria-labelledby={`sec-${group.id}`}>
               <div className="flex items-center justify-between mb-4">
                 <h2 id={`sec-${group.id}`} className="section-heading" style={{ marginBottom: 0 }}>
                   {group.category}
@@ -636,257 +732,266 @@ const SkillAnalysis = () => {
       )}
 
       {/* ── Granular Evidence Inspection Modal ───────────────────── */}
-      {inspectingSkill && (
-        <div
-          className="custom-modal-backdrop"
-          onClick={handleCloseEvidenceModal}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="evidence-modal-title"
-        >
+      {inspectingSkill &&
+        createPortal(
           <div
-            className="custom-modal"
-            style={{ maxWidth: '640px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
-            onClick={(e) => e.stopPropagation()}
+            className="custom-modal-backdrop"
+            onClick={handleCloseEvidenceModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="evidence-modal-title"
           >
-            {/* Modal Header */}
-            <div className="custom-modal__header">
-              <div>
-                <h3 id="evidence-modal-title" className="custom-modal__title">
-                  {inspectingSkill} Evidence Breakdown
-                </h3>
-                <p className="custom-modal__subtitle">
-                  Detailed repository artifacts and signals verifying this skill
-                </p>
-              </div>
-              <button
-                onClick={handleCloseEvidenceModal}
-                className="custom-modal__close"
-                aria-label="Close modal"
-              >
-                &times;
-              </button>
-            </div>
-
-            {/* Modal Body */}
             <div
-              className="custom-modal__body"
-              style={{ overflowY: 'auto', flex: 1, padding: 'var(--space-5) var(--space-6)' }}
+              className="custom-modal"
+              style={{
+                width: '100%',
+                maxWidth: '640px',
+                maxHeight: 'min(85vh, calc(100dvh - 32px))',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              {evidenceLoading ? (
-                <div style={{ padding: 'var(--space-6) 0', textAlign: 'center' }}>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                    Loading evidence records for {inspectingSkill}...
+              {/* Modal Header */}
+              <div className="custom-modal__header">
+                <div>
+                  <h3 id="evidence-modal-title" className="custom-modal__title">
+                    {inspectingSkill} Evidence Breakdown
+                  </h3>
+                  <p className="custom-modal__subtitle">
+                    Detailed repository artifacts and signals verifying this skill
                   </p>
                 </div>
-              ) : evidenceError ? (
-                <div
-                  style={{
-                    padding: 'var(--space-4)',
-                    backgroundColor: 'var(--color-danger-light)',
-                    color: 'var(--color-danger)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: 'var(--text-sm)',
-                  }}
+                <button
+                  onClick={handleCloseEvidenceModal}
+                  className="custom-modal__close"
+                  aria-label="Close modal"
                 >
-                  {evidenceError}
-                </div>
-              ) : evidenceData ? (
-                <div>
-                  {/* Summary Metric Strip */}
+                  &times;
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div
+                className="custom-modal__body"
+                style={{ overflowY: 'auto', flex: 1, padding: 'var(--space-5) var(--space-6)' }}
+              >
+                {evidenceLoading ? (
+                  <div style={{ padding: 'var(--space-6) 0', textAlign: 'center' }}>
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                      Loading evidence records for {inspectingSkill}...
+                    </p>
+                  </div>
+                ) : evidenceError ? (
                   <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 'var(--space-3) var(--space-4)',
-                      backgroundColor: 'var(--color-surface-2)',
-                      border: '1px solid var(--color-border)',
+                      padding: 'var(--space-4)',
+                      backgroundColor: 'var(--color-danger-light)',
+                      color: 'var(--color-danger)',
                       borderRadius: 'var(--radius-md)',
-                      marginBottom: 'var(--space-4)',
-                    }}
-                  >
-                    <div>
-                      <span
-                        style={{
-                          fontSize: 'var(--text-xs)',
-                          color: 'var(--color-text-secondary)',
-                          textTransform: 'uppercase',
-                          fontWeight: 'var(--fw-semibold)',
-                        }}
-                      >
-                        Category
-                      </span>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 'var(--text-sm)',
-                          fontWeight: 'var(--fw-semibold)',
-                          color: 'var(--color-text-primary)',
-                        }}
-                      >
-                        {evidenceData.category || 'General'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span
-                        style={{
-                          fontSize: 'var(--text-xs)',
-                          color: 'var(--color-text-secondary)',
-                          textTransform: 'uppercase',
-                          fontWeight: 'var(--fw-semibold)',
-                        }}
-                      >
-                        Evidence Strength
-                      </span>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 'var(--text-sm)',
-                          fontWeight: 'var(--fw-bold)',
-                          color: 'var(--color-accent)',
-                        }}
-                      >
-                        {Math.round(evidenceData.confidenceScore || 0)}%
-                      </p>
-                    </div>
-
-                    <div>
-                      <span
-                        style={{
-                          fontSize: 'var(--text-xs)',
-                          color: 'var(--color-text-secondary)',
-                          textTransform: 'uppercase',
-                          fontWeight: 'var(--fw-semibold)',
-                        }}
-                      >
-                        Contributing Repos
-                      </span>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 'var(--text-sm)',
-                          fontWeight: 'var(--fw-semibold)',
-                          color: 'var(--color-text-primary)',
-                        }}
-                      >
-                        {evidenceData.repositoryCount || evidenceData.evidence?.length || 1}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Evidence Items List */}
-                  <h4
-                    style={{
                       fontSize: 'var(--text-sm)',
-                      fontWeight: 'var(--fw-semibold)',
-                      color: 'var(--color-text-primary)',
-                      marginBottom: 'var(--space-3)',
                     }}
                   >
-                    Verified Evidence Records ({evidenceData.evidence?.length || 0})
-                  </h4>
+                    {evidenceError}
+                  </div>
+                ) : evidenceData ? (
+                  <div>
+                    {/* Summary Metric Strip */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: 'var(--space-3) var(--space-4)',
+                        backgroundColor: 'var(--color-surface-2)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        marginBottom: 'var(--space-4)',
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-text-secondary)',
+                            textTransform: 'uppercase',
+                            fontWeight: 'var(--fw-semibold)',
+                          }}
+                        >
+                          Category
+                        </span>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 'var(--fw-semibold)',
+                            color: 'var(--color-text-primary)',
+                          }}
+                        >
+                          {evidenceData.category || 'General'}
+                        </p>
+                      </div>
 
-                  {(!evidenceData.evidence || evidenceData.evidence.length === 0) ? (
-                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                      No granular records available.
-                    </p>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                      {evidenceData.evidence.map((item, idx) => {
-                        const typeBadge = formatEvidenceType(item.evidenceType);
-                        return (
-                          <div
-                            key={item.id || idx}
-                            style={{
-                              padding: 'var(--space-3) var(--space-4)',
-                              backgroundColor: 'var(--color-surface)',
-                              border: '1px solid var(--color-border)',
-                              borderRadius: 'var(--radius-md)',
-                            }}
-                          >
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-text-secondary)',
+                            textTransform: 'uppercase',
+                            fontWeight: 'var(--fw-semibold)',
+                          }}
+                        >
+                          Evidence Strength
+                        </span>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 'var(--fw-bold)',
+                            color: 'var(--color-accent)',
+                          }}
+                        >
+                          {Math.round(evidenceData.confidenceScore || 0)}%
+                        </p>
+                      </div>
+
+                      <div>
+                        <span
+                          style={{
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-text-secondary)',
+                            textTransform: 'uppercase',
+                            fontWeight: 'var(--fw-semibold)',
+                          }}
+                        >
+                          Contributing Repos
+                        </span>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 'var(--fw-semibold)',
+                            color: 'var(--color-text-primary)',
+                          }}
+                        >
+                          {evidenceData.repositoryCount || evidenceData.evidence?.length || 1}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Evidence Items List */}
+                    <h4
+                      style={{
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 'var(--fw-semibold)',
+                        color: 'var(--color-text-primary)',
+                        marginBottom: 'var(--space-3)',
+                      }}
+                    >
+                      Verified Evidence Records ({evidenceData.evidence?.length || 0})
+                    </h4>
+
+                    {(!evidenceData.evidence || evidenceData.evidence.length === 0) ? (
+                      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                        No granular records available.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                        {evidenceData.evidence.map((item, idx) => {
+                          const typeBadge = formatEvidenceType(item.evidenceType);
+                          return (
                             <div
+                              key={item.id || idx}
                               style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                marginBottom: '4px',
-                                gap: 'var(--space-2)',
+                                padding: 'var(--space-3) var(--space-4)',
+                                backgroundColor: 'var(--color-surface)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: 'var(--radius-md)',
                               }}
                             >
-                              <span
+                              <div
                                 style={{
-                                  fontWeight: 'var(--fw-semibold)',
-                                  fontSize: 'var(--text-sm)',
-                                  color: 'var(--color-accent)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  marginBottom: '4px',
+                                  gap: 'var(--space-2)',
+                                  flexWrap: 'wrap',
                                 }}
                               >
-                                {item.repositoryFullName || item.fullName || item.repositoryName || 'Repository'}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className={`badge ${typeBadge.badgeClass}`} style={{ fontSize: '11px' }}>
-                                  {typeBadge.label}
+                                <span
+                                  style={{
+                                    fontWeight: 'var(--fw-semibold)',
+                                    fontSize: 'var(--text-sm)',
+                                    color: 'var(--color-accent)',
+                                  }}
+                                >
+                                  {item.repositoryFullName || item.fullName || item.repositoryName || 'Repository'}
                                 </span>
-                                {item.confidenceScore != null && (
-                                  <span
-                                    style={{
-                                      fontSize: '11px',
-                                      color: 'var(--color-text-secondary)',
-                                      fontWeight: 'var(--fw-semibold)',
-                                    }}
-                                  >
-                                    Score: {Math.round(item.confidenceScore)}%
+                                <div className="flex items-center gap-2">
+                                  <span className={`badge ${typeBadge.badgeClass}`} style={{ fontSize: '11px' }}>
+                                    {typeBadge.label}
                                   </span>
+                                  {item.confidenceScore != null && (
+                                    <span
+                                      style={{
+                                        fontSize: '11px',
+                                        color: 'var(--color-text-secondary)',
+                                        fontWeight: 'var(--fw-semibold)',
+                                      }}
+                                    >
+                                      Score: {Math.round(item.confidenceScore)}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <p
+                                style={{
+                                  fontSize: 'var(--text-xs)',
+                                  color: 'var(--color-text-primary)',
+                                  margin: '0 0 4px 0',
+                                  lineHeight: 'var(--leading-normal)',
+                                }}
+                              >
+                                {item.evidenceDetails || 'Detected in repository analysis.'}
+                              </p>
+
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  fontSize: '11px',
+                                  color: 'var(--color-text-disabled)',
+                                }}
+                              >
+                                {item.evidenceFilePath ? (
+                                  <span>File: <code>{item.evidenceFilePath}</code></span>
+                                ) : (
+                                  <span />
                                 )}
+                                <span>Detected: {formatDate(item.detectedAt)}</span>
                               </div>
                             </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
 
-                            <p
-                              style={{
-                                fontSize: 'var(--text-xs)',
-                                color: 'var(--color-text-primary)',
-                                margin: '0 0 4px 0',
-                                lineHeight: 'var(--leading-normal)',
-                              }}
-                            >
-                              {item.evidenceDetails || 'Detected in repository analysis.'}
-                            </p>
-
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: '11px',
-                                color: 'var(--color-text-disabled)',
-                              }}
-                            >
-                              {item.evidenceFilePath ? (
-                                <span>File: <code>{item.evidenceFilePath}</code></span>
-                              ) : (
-                                <span />
-                              )}
-                              <span>Detected: {formatDate(item.detectedAt)}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : null}
+              {/* Modal Footer */}
+              <div className="custom-modal__footer">
+                <button onClick={handleCloseEvidenceModal} className="btn btn--secondary btn--sm">
+                  Close
+                </button>
+              </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="custom-modal__footer">
-              <button onClick={handleCloseEvidenceModal} className="btn btn--secondary btn--sm">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </AppLayout>
   );
 };
