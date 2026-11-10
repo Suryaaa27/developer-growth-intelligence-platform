@@ -24,13 +24,18 @@
     "test:roadmap": "node scripts/testLearningRoadmap.js",
     "test:recommendations": "node scripts/testRecommendations.js",
     "test:role:safety": "node scripts/testSafeRoleDeletion.js",
-    "test:audit": "node scripts/testSkillAnalysisAndEvidenceAudit.js"
+    "test:audit": "node scripts/testSkillAnalysisAndEvidenceAudit.js",
+    "test:auth:ratelimit": "node scripts/testAuthRateLimiting.js",
+    "test:encryption": "node scripts/testTokenDualKeyEncryption.js",
+    "test:tokens:reencrypt": "node scripts/testTokenReencryptionUtility.js",
+    "tokens:reencrypt": "node scripts/reencryptGithubTokens.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.4",
     "express-validator": "^7.3.2",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.24.5"

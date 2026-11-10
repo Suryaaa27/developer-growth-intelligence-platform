@@ -13,6 +13,24 @@ import recommendationRoutes from './routes/recommendationRoutes.js';
 
 const app = express();
 
+// ── 0. Reverse Proxy Trust Configuration ───────────────────────
+// In production behind a single reverse proxy (e.g., Render, AWS ALB, Heroku),
+// trust the first proxy hop so rate limiters and logging evaluate the real client IP.
+// Avoid setting 'true' indiscriminately to prevent X-Forwarded-For IP spoofing.
+if (process.env.TRUST_PROXY !== undefined) {
+  if (process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+  } else if (process.env.TRUST_PROXY === 'false' || process.env.TRUST_PROXY === '0') {
+    app.set('trust proxy', false);
+  } else if (!isNaN(Number(process.env.TRUST_PROXY))) {
+    app.set('trust proxy', Number(process.env.TRUST_PROXY));
+  } else {
+    app.set('trust proxy', process.env.TRUST_PROXY);
+  }
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ── 1. CORS Configuration ─────────────────────────────────────
 // Allow requests from the local React frontend
 const clientOrigin = process.env.CLIENT_URL || 'http://localhost:5173';

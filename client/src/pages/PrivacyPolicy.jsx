@@ -45,7 +45,7 @@ const PrivacyPolicy = () => (
             <li>To authenticate your session using a JSON Web Token (JWT).</li>
           </ul>
           <p style={{ fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-relaxed)', marginTop: 'var(--space-3)' }}>
-            We do not use your data to train machine learning models, build advertising profiles, or share it with third parties beyond what is necessary to operate the service (e.g. MongoDB Atlas hosting).
+            We do not use your data to train machine learning models, build advertising profiles, or share it with third parties beyond what is necessary to operate the service (e.g. secure MySQL database storage and server hosting).
           </p>
         </section>
 
